@@ -1,0 +1,96 @@
+@c
+@c Instructions on how to set up a group environment, permissions, 
+@c Git repository, dealing with issues etc.
+@c
+@c While some of the discussion may apply to more than one environment,
+@c no attempt was made to untangle and split the discussion.
+@c
+
+@menu
+* Setting Up Git::              
+* Using Git::                   
+@end menu
+
+@node Setting Up Git
+@subsection Setting Up Git
+
+To make your Git logs easier to read, you should set the user.name and
+user.email variables in your .gitconfig file:
+@verbatim
+[user]
+    name  = Firstname Surname
+    email = example@doc.ic.ac.uk
+@end verbatim
+
+Note that we will be checking your Git logs as part of your submission.
+You should ensure that you use meaningful commit messages and make it clear
+who was responsible for each commit (espcially if you are using pair-programming).
+
+To work on the source code, you must create a clone of your group's provided @file{GitLab} repository.
+This can be done by running the following command:
+
+@example
+git clone @value{localgitpath}
+@end example
+replacing @code{<gnum>} with your group number, which can be found on the @code{Gitlab} website.
+
+@node Using Git
+@subsection Using Git
+
+Once you've cloned the repository, you can start working in your clone
+straight away. At any point you can see what files you've modified with
+@samp{git status}, and check a file in greater detail with
+@samp{git diff @var{filename}}. You view more detailed information using
+tools such as @samp{tig}
+
+Git uses an intermediary area between the working filesystem and the actual 
+repository, known as the staging area (or index). This allows you to perform
+tasks such as commiting only a subset of your changes, without modifying your
+copy of the filesystem. Whilst the uses of the staging area are outside the
+scope of this guide, it is important that you are aware of its existence.
+
+When you want to place your modifications into the repository, you must
+first update the staging area with your changes (@samp{git add @var{filename}},
+and then use this to update the repository, using @samp{git commit}. Git
+will open a text editor when commiting, allowing you to provide a description
+of your changes. This can be useful later for reviewing the repository,
+so be sensible with your commit messages.
+
+When you want to share your changes with the rest of your group you will need to 
+run @samp{git push} to send your commits back to the shared @file{labranch} repository.
+Note that the very first time you push you will need to run the command:
+
+@example
+git push origin master
+@end example
+to tell Git which branch of your local repository to push to which remote repository
+(in this case from branch @code{master} to the @code{origin} repository).
+
+Sometimes your group members may make confliting changes to your repository, 
+which Git is unable to solve.
+These problems can be solved using @samp{git mergetool}, 
+but its use is outside the scope of this dicussion.
+
+You can view the history of a file @var{foo} in your working directory,
+including the log messages, with @samp{git log @var{foo}}.
+
+You can give a particular set of file versions a name called a
+@dfn{tag}. Simply execute @samp{git tag @var{name}}.  It's best
+to have no local changes in the working copy when you do this, because
+the tag will not include uncommitted changes. To recover the tagged
+commit later, simply execute @samp{git checkout @var{tag}}.
+
+If you add a new file to the source tree, you'll need to add it to the
+repository with @samp{git add @var{file}}.  This command does not have
+lasting effect until the file is committed later with @samp{git
+commit}.
+
+To remove a file from the source tree, first remove it from the file
+system with @samp{git rm @var{file}}. Again, only @samp{git commit}
+will make the change permanent.
+
+To discard your local changes for a given file, without committing
+them, use @samp{git checkout @var{file} -f}.
+
+For more information, visit the @uref{https://www.git-scm.com/, , Git
+home page}.

@@ -1,0 +1,6 @@
+FAIL tests/devices/alarm-single
+FAIL tests/devices/alarm-multiple
+FAIL tests/devices/alarm-simultaneous
+FAIL tests/devices/alarm-priority
+FAIL tests/devices/alarm-zero
+FAIL tests/devices/alarm-negative

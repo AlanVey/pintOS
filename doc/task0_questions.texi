@@ -1,0 +1,83 @@
+@enumerate  
+
+@item Which Git command should you run to retrieve a copy of your group's shared Pintos repository in your local directory? 
+@tex 
+  \hfill {\bf (1~mark)} 
+@end tex
+
+@item Why is using the strcpy() function to copy strings usually a bad idea?
+(@dfn{Hint: identify the problem, give details and discuss possible solutions.}) 
+@tex 
+  \hfill {\bf (2~marks)}
+@end tex
+
+@item Explain how thread scheduling in Pintos currently works in less than 300 words. Include the chain of execution of function calls. 
+(@dfn{Hint: we expect you to at least mention which functions participate in a context switch, how they interact, how and when the thread state is modified and the role of interrupts.})
+@tex 
+  \hfill {\bf (6~marks)}
+@end tex
+
+@item Explain the property of reproducibility and how the lack of reproducibility will affect debugging.
+@tex 
+  \hfill {\bf (2~marks)}
+@end tex
+
+@item How would you print an unsigned 64 bit @code{int}? 
+(Consider that you are working with C99). Don't forget to state any inclusions needed by your code.
+@tex 
+  \hfill {\bf (2~marks)}
+@end tex
+
+@item Describe the data structures and functions that locks and semaphores in Pintos have in common. What extra property do locks have that semaphores do not?
+@tex 
+  \hfill {\bf (3~marks)}
+@end tex
+
+@item In Pintos, a thread is characterized by a struct and an execution stack. What are the limitations on the size of these data structures? Explain how this relates to stack overflow and how Pintos identifies it.
+@tex
+  \hfill {\bf (3~marks)}
+@end tex
+
+@item If test @file{src/tests/threads/alarm-multiple} fails, where would you find its output and result logs? Provide both paths and file names.
+(@dfn{Hint : you might want to run this test to find out.})
+@tex
+  \hfill {\bf (1~mark)}
+@end tex
+
+@item 
+Reimplement @code{timer_sleep()}, defined in '@code{devices/timer.c}’.
+@tex
+  \hfill {\bf (20~marks)}
+@end tex
+
+Although a working implementation of @code{timer_sleep} is provided, it "busy waits", that is, it spins in a loop checking the current time and calling @code{thread_yield()} until enough time has gone by. 
+Reimplement it to avoid busy waiting (@b{10 marks}). 
+Further instructions and hints can be found in the Pintos manual.
+
+You also need to provide a design document which answers the following questions:  
+
+@itemize @w{}
+@item @b{Data Structures}
+
+A1: (@b{2 marks}) Copy here the declaration of each new or changed `@code{struct}' or `@code{struct}' member, global or static variable, `@code{typedef}', or enumeration. Identify the purpose of each in 25 words or less.
+
+@item @b{Algorithms}
+
+A2: (@b{2 marks}) Briefly describe what happens in a call to @code{timer_sleep()}, including the actions performed by the timer interrupt handler on each timer tick.
+ 
+A3: (@b{2 marks}) What steps are taken to minimize the amount of time spent in the timer interrupt handler?
+
+@item @b{Synchronization}
+
+A4: (@b{1 mark}) How are race conditions avoided when multiple threads call @code{timer_sleep()} simultaneously?
+
+A5: (@b{1 mark}) How are race conditions avoided when a timer interrupt occurs during a call to @code{timer_sleep()}?
+
+@item @b{Rationale}
+
+A6: (@b{2 marks}) Why did you choose this design?  
+In what ways is it superior to another design you considered?
+
+@end itemize
+
+@end enumerate

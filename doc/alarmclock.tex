@@ -1,0 +1,114 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage [utf8]{inputenc}
+\usepackage{xspace} %better spacing option with :
+\usepackage{amsmath,amsthm,amssymb} %package matematici
+\usepackage{amsfonts} % altri simbolo matematici stronzi
+\usepackage{latexsym} %altri simboli chissa quali
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{multicol}
+\usepackage[pdftex]{color}
+\usepackage{url}
+\usepackage{subfigure}
+\usepackage[final]{pdfpages}
+\newcommand{\fncyblank }{\fancyhf {}}
+
+\addtolength{\hoffset}{-1,5cm}
+\addtolength{\textwidth}{3cm}
+
+\definecolor{Gray}{cmyk}{0,0,0,0.50}
+
+\usepackage{sectsty}
+\sectionfont{\large}
+\subsectionfont{\normalsize}
+
+\begin{document}
+
+\small
+
+\begin{center}
+\begin{LARGE}
+Pintos Task 0
+\end{LARGE}
+\end{center}
+
+\begin{center}
+211 Operating Systems \\
+Department of Computing \\
+Imperial College
+\end{center}
+
+This task is logically divided into two parts:
+\begin{itemize}
+\item Questions 1-8 test your understanding of Pintos basic concepts. 
+      To answer these questions you are invited to carefully read the manual. 
+      For some questions, examining the Pintos code can be useful to provide exhaustive answers, which might be awarded with extra marks accordingly. 
+      The maximum possible mark in Questions 1-8 is 20.
+      
+\item Question 9 tests your comprehension and ability of writing Pintos code. 
+      To successfully accomplish this task, you first have to download, compile, install and run Pintos, and then develop a simple functionality. 
+      The maximum possible mark in Question 9 is 20. 
+\end{itemize}
+
+\subsection*{Question 1 - (1 mark)}
+Which Git command should you run to retrieve a copy of your group’s shared Pintos repository in your local directory?
+
+\subsection*{Question 2 - (2 marks)}
+Why is using the \texttt{strcpy()} function to copy strings usually a bad idea? \\
+(\textit{Hint: identify the problem, give details and discuss possible solutions.})
+
+\subsection*{Question 3 - (6 marks)}
+Explain how thread scheduling in Pintos currently works in less than 300 words. 
+Include the chain of execution of function calls. \\
+(\textit{Hint: we expect you to at least mention which functions participate in a context switch, how they interact, how and when the thread state is modified, the role of interrupts.)}
+
+\subsection*{Question 4 - (2 marks)}
+Explain the property of reproducibility and how the lack of reproducibility will affect debugging.
+
+\subsection*{Question 5 - (2 marks)}
+How would you print an unsigned 64 bit \texttt{int}? 
+(Consider that you are working with C99). 
+Don't forget to state any inclusions needed by your code.
+
+\subsection*{Question 6 - (3 marks)}
+Describe the data structures and functions that locks and semaphores in Pintos have in common. 
+What extra property do locks have that semaphores do not?
+
+\subsection*{Question 7 - (3 marks)}
+In Pintos, a thread is characterized by a struct and an execution stack. 
+What are the limitations on the size of these data structures? 
+Explain how this relates to stack overflow and how Pintos identifies it.
+
+\subsection*{Question 8 - (1 mark)}
+If test \texttt{src/tests/threads/alarm-multiple} fails, where would you find its output and result logs? 
+Provide both paths and file names.
+(\textit{Hint: you might want to run this test and find out.}) 
+
+\subsection*{Question 9 - (20 marks) - The Alarm Clock}
+In this question, you are requested to implement a simple functionality in Pintos and to answer the questions below.
+
+\section*{Coding the Alarm Clock in Pintos} 
+Reimplement \texttt{timer$\_$sleep()}, defined in '\texttt{devices/timer.c}’. 
+Although a working implementation of \texttt{timer$\_$sleep()} is provided, it “busy waits,” that is, it spins in a loop checking the current time and calling \texttt{thread$\_$yield()} until enough time has gone by. 
+Reimplement it to avoid busy waiting ({\bf 10 marks}). 
+Further instructions and hints can be found in the Pintos manual.
+
+You also need to provide a design document which answers the following questions: 
+
+\subsubsection*{Data Structures}
+A1: ({\bf 2 marks}) Copy here the declaration of each new or changed `\texttt{struct}' or `\texttt{struct}' member, global or static variable, `\texttt{typedef}', or enumeration. Identify the purpose of each in 25 words or less.
+
+\subsubsection*{Algorithms}
+A2: ({\bf 2 marks}) Briefly describe what happens in a call to \texttt{timer$\_$sleep()}, including the actions performed by the timer interrupt handler on each timer tick. \\ 
+A3: ({\bf 2 marks}) What steps are taken to minimize the amount of time spent in the timer interrupt handler?
+
+\subsubsection*{Synchronization}
+A4: ({\bf 1 mark}) How are race conditions avoided when multiple threads call \texttt{timer$\_$sleep()} simultaneously? \\ 
+A5: ({\bf 1 mark}) How are race conditions avoided when a timer interrupt occurs during a call to \texttt{timer$\_$sleep()}?
+
+\subsubsection*{Rationale}
+A6: ({\bf 2 marks}) Why did you choose this design?  
+In what ways is it superior to another design you considered?
+
+\end{document}
