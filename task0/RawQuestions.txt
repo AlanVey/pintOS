@@ -1,0 +1,12 @@
+1)The git command used for copying the shared repository is git-clone,
+written as "git clone".
+
+2)The function strcpy() does not specify a character limit and
+therefore it does not stop until the end of the target string. In case the
+destination string does not have sufficient memory allocated, the function will
+write in a different region, corrupting data.
+A solution to this problem is to use strlcpy, which receives a third argument,
+the number of chars it has to copy. Strlcpy is similar to the more well known
+function strncpy, but differs from it in the sense that it places a '\0' at the
+last position if it has space(the third argument is bigger than 0).
+
