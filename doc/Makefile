@@ -34,7 +34,7 @@ alarmclock.pdf : alarmclock.tex
 
 clean:
 	rm -f *.info* *.html
-	rm -f *.dvi *.pdf *.ps *.log *~
+	rm -f *.dvi *.pdf *.ps *.log *~ *.aux *.cp *.fn *.ky *pg *.toc *.tp *.vr
 	rm -rf WWW
 	rm -f sample.tmpl.texi
 	rm -f alarmclock.pdf
