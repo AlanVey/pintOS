@@ -1,0 +1,47 @@
+2.2.1.2 Task 0 Questions
+
+1.	Which Git command should you run to retrieve a copy of your group’s shared Pintos repository in your local directory?
+initial use:       git clone https://gitlab.doc.ic.ac.uk/lab1314_spring/pintos_04.git
+subsequently: git pull origin master
+
+2.	Why is using the strcpy() function to copy strings usually a bad idea? 
+The strcpy() function takes the form: char* strcpy(char* destination, const char* source). The problem with this is that the destination pointer must point to the beginning of an area of memory large enough to contain the source including the sting terminating character, otherwise strcpy will overflow, possibly corrupting other data. Also, the source and destination pointers must not overlap, as if they do the string will be corrupted. Instead the use of strlcpy is favourable. It is of the form: size_t strlcpy(char * restrict destination, const char * restrict source, size_t size). This is much safer because we specify size hence making overflow unlikely if used correctly.
+
+3.	Explain how thread scheduling in Pintos currently works in less than 300 words. Include the chain of execution of function calls. (hint: we expect you to at least mention which functions participate in the context switch, how they interact, how and when the thread state is modified and the role of interrupts.)
+The schedule function is called from either thread_block(), thread_exit() or thread_yield(). Each of these three functions change thread_status to THREAD_BLOCK, THREAD_DYING or THREAD_READY respectively, and turn interrupts off except in the case of thread_block which first asserts interrupts are off. Having the interrupts disabled allows us to synchronise kernel threads with external interrupt handlers meaning our threads can change state and switch which is active without any interruptions.
+schedule() has three members: 
+1) a pointer to the current thread.
+2) a pointer to the next thread.
+3) a pointer to prev initialised to NULL.
+schedule() asserts:
+1) Interrupts are disabled.
+2) The current thread status has been changed to anything but THREAD_RUNNING.
+3) The next thread is a in fact a thread.
+After this it tests to see wether or not the current thread and the next thread are different. If so the assembly code for the switch is called which pushes the registers of the current thread to the stack and saves the CPU pointier to the struct thread’s stack member. Then it pops the registers from next’s stack, restores the CPU pointer and returns a pointer to the now no longer running thread to the prev field. If they are the same thread the last step is skipped. When thread_schedule_tail(prev) is called it does the following:
+It sets cur to running_thread() (which will differ based on whether in schedule() cur != next). It asserts interrupt are disabled again, sets the cur threads status to THREAD_RUNNING, sets the thread ticks variable back to 0 and then attempts to run palloc_free_page() on the prev thread passed as a parameter if it is not NULL, has status THREAD_DYING and is not the initial_thread.
+	
+
+4.	Explain the property of reproducibility and how the lack of reproducibility will affect de- bugging.
+In order to satisfy the property of reproducibility, given some state S and some process P, when P is applied to S one should obtain the same resulting state S’ considering all else remains the same (input variables for example). QEMU only supports real time simulation meaning interrupts may occur at irregularly spaced time intervals resulting in the possibility of bugs appearing and disappearing when running the tests repeatedly. For example, results generated from I/O devices occur at unpredictable times in an unpredictable order. This clearly demonstrates a lack of reproducibility and shows our simulation is non deterministic so no matter how often we run the test we can never be sure our solution is bug free.
+
+5.	How would you print an unsigned 64 bit int? (Consider that you are working with C99). Don’t forget to state any inclusions needed by your code.
+#include <inttypes.h> // Contains macros for different inttypes
+#include <stdio.h>      // I/O
+#include <stdint.h>     // Contains different int sizes 
+void print_uInt64(uint64_t p_int) { printf(“%PRIu64” , p_int); }
+
+
+6.	Describe the data structures and functions that locks and semaphores in Pintos have in common. What extra property do locks have that semaphores do not?
+Both locks and semaphores are structs that contain integers and a list of waiters. The only difference is that locks contain an additional member pointing to the thread that set it. The lock can only be unlocked by the thread that set it contrary to the semaphore. Both of them have the same functions for initialisation, increasing/decreasing their integer value, and attempting to increase the value (slightly different checks first before increasing). Lock has an additional function that checks whether the current running thread is the ‘owner’ of it. Apart from the above both of these can be used in the same way to control access to a resource. When a thread accesses a resource it decrements the lock/semaphore and when 	it is done with the resources it increments it. Hence nothing can be accessed when lock/semaphore is set to 0.
+	
+
+7.	In Pintos, a thread is characterised by a struct and an execution stack. What are the limitations on the size of these data structures? Explain how this relates to stack overflow and how Pintos identifies it.
+A thread is always allocated a page of memory (4kB). The struct thread is located at the 		beginning of the page (0 index), and the stack grows downwards from the top of the page. The 	more space the struct occupies, the less space there is for the stack, and so should ideally be well under 1kB in size. If the stack grows too large it overflows into the structs part of the page and corrupts it. The thread struct has a member defined at the bottom of it which is allocated a 64 bit integer (THREAD_MAGIC = 0xcd6abf4b). This value allows us to check wether or not stack overflow has corrupted the thread.
+
+
+8.	If test ‘src/tests/threads/alarm-multiple’ fails, where would you find its output and result logs? Provide both paths and file names. (hint: you might want to run this test to find out.) 
+	Not sure!!!!!!
+	…/alarm-multiple.result
+	…/alarm-multiple.output
+
+
