@@ -2,30 +2,30 @@
 written as 'git clone'.
 
 2.The strcpy() function does not ask for the length of the destination buffer
-and therefore it can overflow it, writing into other parts of memory and
-therefore corrupting data. An alternative to it could be the strncpy, which
-takes a third argument, which is the number of chars to be copied. This however
+and therefore can overflow it, writing into other parts of memory and
+therefore possibly corrupting data. An alternative to the strcpy() could be the strncpy(), which
+takes a third argument as the number of chars to be copied. This however
 does not place a null string terminator at the end of the destination. The best
 alternative to strcpy() is therefore strlcpy(), which does place a null string
-terminator if it has space(the given size is larger than 0).
+terminator if it has space (the given size is larger than 0).
 
 3.In pintos, the scheduler works in a round-robin manner, by holding a list of
 threads and allocating the same number of clock ticks for each of the threads.
-The scheduler() function declared in threads.c is static and therefore can only
-be called from within the same source file(threads.c). As it has a fixed
+The scheduler() function declared in 'threads.c' is static and therefore can only
+be called from within the same source file ('threads.c'). As it has a fixed
 address, and all threads share the address space, in order to avoid a race
-condition, the function must be called with interrupts disabled. The function
+condition the function must be called with interrupts disabled. The function
 gets pointers to the running thread and the first thread from the list holding
 threads ready to be run, asserts that the
-pointers it has received do point to a thread with the status RUNNING_THREAD and
-to a valid thread respectively; also, it asserts that interrupts are off. Then, in case the
+pointers it has received do indeed point to a thread with the status RUNNING_THREAD and
+to a valid thread respectively; also asserting that interrupts are off. Then, in case the
 currently running thread and the next thread are different, it replaces the
 running thread with the one which was previously the first in the list which
 holds threads ready to be scheduled by using the switch_threads function
-defined in switch.h and implemented in assembly.
+defined in 'switch.h' and implemented in assembly.
 Then the thread_schedule_tail is called, which sets the status of the thread now
-running to THREAD_RUNNING. A new time slice is started by reintializing
-thread_ticks to 0. Then if the thread which was previouly running is not the
+running to THREAD_RUNNING. A new time slice is started by reinitializing
+thread_ticks to 0. If the thread which was previouly running is not the
 idle thread and has THREAD_DYING as its status, it is deallocated.
 
 4.Reproducibility in this instance means a similar behaviour of the program as
