@@ -1,14 +1,43 @@
-1)The git command used for copying the shared repository is git-clone,
-written as "git clone".
+1.To retrieve a copy of the repository, we have used the command 'git-clone',
+written as 'git clone'.
 
-2)The function strcpy() does not specify a character limit and
-therefore it does not stop until the end of the target string. In case the
-destination string does not have sufficient memory allocated, the function will
-write in a different region, corrupting data.
-A solution to this problem is to use strlcpy, which receives a third argument,
-the number of chars it has to copy. Strlcpy is similar to the more well known
-function strncpy, but differs from it in the sense that it places a '\0' at the
-last position if it has space(the third argument is bigger than 0).
+2.The strcpy() function does not ask for the length of the destination buffer
+and therefore it can overflow it, writing into other parts of memory and
+therefore corrupting data. An alternative to it could be the strncpy, which
+takes a third argument, which is the number of chars to be copied. This however
+does not place a null string terminator at the end of the destination. The best
+alternative to strcpy() is therefore strlcpy(), which does place a null string
+terminator if it has space(the given size is larger than 0).
 
-3) Thread scheduling is done by the BSD scheduler, which handles allthe threads.
+3.In pintos, the scheduler works in a round-robin manner, by holding a list of
+threads and allocating the same number of clock ticks for each of the threads.
+The scheduler() function declared in threads.c is static and therefore can only
+be called from within the same source file(threads.c). As it has a fixed
+address, and all threads share the address space, in order to avoid a race
+condition, the function must be called with interrupts disabled. The function
+gets pointers to the running thread and the first thread from the list holding
+threads ready to be run, asserts that the
+pointers it has received do point to a thread with the status RUNNING_THREAD and
+to a valid thread respectively; also, it asserts that interrupts are off. Then, in case the
+currently running thread and the next thread are different, it replaces the
+running thread with the one which was previously the first in the list which
+holds threads ready to be scheduled by using the switch_threads function
+defined in switch.h and implemented in assembly.
+Then the thread_schedule_tail is called, which sets the status of the thread now
+running to THREAD_RUNNING. A new time slice is started by reintializing
+thread_ticks to 0. Then if the thread which was previouly running is not the
+idle thread and has THREAD_DYING as its status, it is deallocated.
 
+4.Reproducibility in this instance means a similar behaviour of the program as
+long as it has been started in the same manner and it has received the same
+inputs. Because of external interrupts reproducibility is not possible in this
+case, as external interrupts are asynchronous. Therefore, debugging in the same
+conditions may give different results. Also, the same test may produce different
+outputs if run in similar circumstances but at different times.
+
+5.An integer can be printed using the 'printf' function, for which '<stdio.h>'
+must be included. An unsigned int with 64 bytes in particular must be stored in
+the type uint64_t which can be found in the header '<stdint.h>'
+For it to be printed, we need the macro PRIu64 from '<inttypes.h>'
+It can be printed as:
+printf ("value=%08"PRIu64"\n", value)
