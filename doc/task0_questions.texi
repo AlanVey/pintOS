@@ -38,7 +38,7 @@
   \hfill {\bf (3~marks)}
 @end tex
 
-@item If test @file{src/tests/threads/alarm-multiple} fails, where would you find its output and result logs? Provide both paths and file names.
+@item If test @file{src/tests/devices/alarm-multiple} fails, where would you find its output and result logs? Provide both paths and file names.
 (@dfn{Hint : you might want to run this test to find out.})
 @tex
   \hfill {\bf (1~mark)}

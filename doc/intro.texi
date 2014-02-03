@@ -281,7 +281,7 @@ writes its output to @file{@var{t}.output}, then a script scores the
 output as ``pass'' or ``fail'' and writes the verdict to
 @file{@var{t}.result}.  To run and grade a single test, @command{make}
 the @file{.result} file explicitly from the @file{build} directory, e.g.@:
-@code{make tests/threads/alarm-multiple.result}.  If @command{make} says
+@code{make tests/devices/alarm-multiple.result}.  If @command{make} says
 that the test result is up-to-date, but you want to re-run it anyway,
 either run @code{make clean} or delete the @file{.output} file by hand.
 

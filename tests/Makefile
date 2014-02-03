@@ -1,4 +1,4 @@
-TESTS = examples threads p1 userprog p2 vm p3 filesys p4
+TESTS = examples devices p0 threads p1 userprog p2 vm p3 filesys p4
 
 PATH := $(shell pwd)/../src/utils:$(PATH)
 
@@ -62,7 +62,7 @@ devices::
 threads::
 	$(mk-sandbox)
 	$(compile)
-	$(run-tests) TESTS=tests/threads/alarm-single
+	$(run-tests)
 	$(test-clean)
 	$(clean)
 userprog vm filesys::
