@@ -29,6 +29,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+static void check_status(struct thread *th, void *aux UNUSED);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -89,11 +90,16 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  
+
+  /*puts the thread asleep by starting interrupts*/
+  enum intr_level old_level = intr_disable();
+  thread_current()->asleep = ticks;
+  
+  thread_block();
+  intr_set_level(old_level);
+  /*restores interrupts*/
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +178,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  /*loops over each thread*/
+  thread_foreach(check_status, 0);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -243,4 +251,18 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
+}
+
+/*checks all the sleeping threads and unblocks the ones which have waited
+ * enough*/
+static void check_status(struct thread *th, void *aux UNUSED)
+{
+  if(th->status == THREAD_BLOCKED && th->asleep > 0)
+  {
+    th->asleep--;
+    if(th->asleep == 0)
+    {
+      thread_unblock(th);
+    }
+  }
 }
