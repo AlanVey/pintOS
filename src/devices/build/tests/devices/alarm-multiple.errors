@@ -1,4 +1,0 @@
-Prototype mismatch: sub main::SIGVTALRM () vs none at /vol/lab/secondyear/bin/pintos line 934.
-Constant subroutine SIGVTALRM redefined at /vol/lab/secondyear/bin/pintos line 926.
-Use of uninitialized value in numeric le (<=) at /vol/lab/secondyear/bin/pintos line 829.
-qemu: terminating on signal 2 from pid 22997
