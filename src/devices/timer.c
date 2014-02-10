@@ -5,10 +5,11 @@
 #include <stdio.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-  
-/* See [8254] for hardware details of the 8254 timer chip. */
+#include "lib/kernel/list.h"
+
 
 #if TIMER_FREQ < 19
 #error 8254 timer requires TIMER_FREQ >= 19
@@ -20,6 +21,9 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+//true if list of sleeping threads is uninitialized
+bool b_initialized_sleeping_list = false;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -29,13 +33,46 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-static void check_status(struct thread *th, void *aux UNUSED);
+//looks in the list of sleeping threads and wakes up the threads
+//which should finish their sleep
+static void fu_check_sleeping(void);
+//comparison function for l_sleeping_threads
+static bool fu_compare(const struct list_elem *le_a,
+                       const struct list_elem *le_b, void *aux UNUSED);
+
+/*list which holds references to threads which are asleep*/
+/*orders the threads in increasing order of time when they have to be awaken*/
+struct list l_sleeping_threads;
+
+/*the structure which holds a list_elem*/
+/*it also holds a thread and the time when the thread has to be awaken*/
+struct wake_up
+{
+  //I need to store the list element by its value so that its
+  //shall be initialized
+  struct list_elem le;
+  struct thread *th;
+  int64_t wake_time;
+};
+
+//lock used by the timer_sleep function
+struct lock lock_timer_sleep;
+
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
 timer_init (void) 
 {
+  /*initialize list of sleeping threads*/
+  list_init(&l_sleeping_threads);
+  b_initialized_sleeping_list = true;
+  //initialize lock
+  lock_init(&lock_timer_sleep);
+
+  //TODO
+  //I have no clue what these two do so it's safer to place the list
+  //initialization before them
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
 }
@@ -91,15 +128,33 @@ void
 timer_sleep (int64_t ticks) 
 {
   ASSERT (intr_get_level () == INTR_ON);
-  
 
-  /*puts the thread asleep by starting interrupts*/
-  enum intr_level old_level = intr_disable();
-  thread_current()->asleep = ticks;
-  
+  //the thread asks to get the lock
+  lock_acquire(&lock_timer_sleep);
+
+  //creates a container holding a thread and the time this has to wake up
+  struct wake_up *p_wu = malloc(sizeof(struct wake_up));
+  //TODO consider moving the element in the thread itself
+
+  p_wu->th = thread_current();
+  //the wake up time for the thread is the current time + the time the
+  //thread has to sleep
+  //TODO what if there  is an interrupt between the calling og this function
+  //and the time I access timer_ticks()?
+  //if it is during the function call then I have nothing to do
+  //adding a field to thread won't change anything
+  p_wu->wake_time = timer_ticks() + ticks;
+
+  //adds a list element to the end of the list
+  list_insert_ordered(&l_sleeping_threads, &p_wu->le, &fu_compare, NULL);
+
+  //releases lock
+  lock_release(&lock_timer_sleep);
+
+  intr_disable();
+  //I block the current thread
   thread_block();
-  intr_set_level(old_level);
-  /*restores interrupts*/
+  intr_enable();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,17 +226,22 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
-  /*loops over each thread*/
-  thread_foreach(check_status, 0);
-}
 
+  //TODO wtf does this do?
+  thread_tick ();
+  //TODO not sure if this is the proper order
+  //checks if any thread can be waken up
+  if(b_initialized_sleeping_list)
+  {
+    fu_check_sleeping();
+  }
+}
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */
 static bool
@@ -253,16 +313,55 @@ real_time_delay (int64_t num, int32_t denom)
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
 
-/*checks all the sleeping threads and unblocks the ones which have waited
- * enough*/
-static void check_status(struct thread *th, void *aux UNUSED)
+static void
+fu_check_sleeping(void)
 {
-  if(th->status == THREAD_BLOCKED && th->asleep > 0)
+  while(!list_empty(&l_sleeping_threads))
   {
-    th->asleep--;
-    if(th->asleep == 0)
+    //checks if the head of the list can be awaken
+    struct wake_up *wu = list_entry(list_front(&l_sleeping_threads),
+                                    struct wake_up, le);
+
+    //check the validity of the structure extracted
+    ASSERT(wu != NULL && wu->th != NULL);
+    //is the wake up time is before the current time or now
+    if(wu->wake_time <= timer_ticks())
     {
-      thread_unblock(th);
+      //I remove the first element, but I don't need to store the pointer
+      list_pop_front(&l_sleeping_threads);
+      //change the status of the thread which was the front of the list
+      thread_unblock(wu->th);
+
+      //TODO: free the memory
+      //I free the list element and the structure containing it from memory
+      /*
+      intr_enable();
+      free(wu);
+      intr_disable();
+      */
+    }
+    else
+    {
+      return;
     }
   }
+  return;
+}
+
+//comparison function for sleeping threads
+static bool
+fu_compare(const struct list_elem *le_a, const struct list_elem *le_b, void *aux UNUSED)
+{
+  //checks if the elements it are not null
+  ASSERT(le_a != NULL);
+  ASSERT(le_b != NULL);
+  //checks its final argument does not mean anything
+  ASSERT(aux == NULL);
+  //obtain the struct which encompasses the element a and b
+  struct wake_up *p_wu_a = list_entry(le_a, struct wake_up, le);
+  struct wake_up *p_wu_b = list_entry(le_b, struct wake_up, le);
+
+  //returns true when the time element a has to be waken up is larger so the
+  //two elements have to be swaped
+  return (p_wu_a->wake_time < p_wu_b->wake_time);
 }

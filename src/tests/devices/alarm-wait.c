@@ -9,6 +9,9 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "devices/timer.h"
+#include <stdint.h>
+#include <stdio.h>
+#include <inttypes.h>
 
 static void test_sleep (int thread_cnt, int iterations);
 
@@ -67,7 +70,7 @@ test_sleep (int thread_cnt, int iterations)
 
   /* Allocate memory. */
   threads = malloc (sizeof *threads * thread_cnt);
-  output = malloc (sizeof *output * iterations * thread_cnt * 2);
+  output = malloc (sizeof *output * iterations * thread_cnt * 10);//want more space
   if (threads == NULL || output == NULL)
     PANIC ("couldn't allocate memory for test");
 
@@ -145,6 +148,10 @@ sleeper (void *t_)
     {
       int64_t sleep_until = test->start + i * t->duration;
       timer_sleep (sleep_until - timer_ticks ());
+      printf ("sleep_until=%d08"PRId64"\n", sleep_until);
+      printf ("timer_ticks=%d08"PRId64"\n", timer_ticks);
+      msg ("sleep_until=%d08"PRId64"\n", sleep_until);
+      msg ("timer_ticks=%d08"PRId64"\n", timer_ticks);
       lock_acquire (&test->output_lock);
       *test->output_pos++ = t->id;
       lock_release (&test->output_lock);

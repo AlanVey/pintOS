@@ -86,7 +86,9 @@ struct thread
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
-    int64_t asleep;                     /* counts how much thread sleep */
+    //TODO remove comment beneath
+    //I don't need to know when a thread started to sleep for now
+    //int64_t started_sleeping;           /* moment when variable started sleepin */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
