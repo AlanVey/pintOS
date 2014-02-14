@@ -71,21 +71,6 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-//function which handles the insertion of a thread into the ready_list or a
-//lock's list
-//this inserts the thread according to decresing priority
-//then, if the thread is inserted into the ready_list
-//it checks if the currently running thread has a higher priority than the first
-//element of the list, and if it has, it calls schedule
-//needs to know:thread, list, bool value certifying that the given list is the
-//ready list
-////TODO delete data about bool variable
-static void fu_insert_thread_elem(struct thread *th, struct list *l);
-//compares two list elems in a decresing order, based on priority
-static bool fu_comp_priority(const struct list_elem *a,
-                             const struct list_elem *b,
-                             void *aux);
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -258,13 +243,11 @@ thread_unblock (struct thread *t)
 
   ASSERT (is_thread (t));
 
-  //TODO delete useless code
-  //there is no need for interrupts when a thread is unblocked
-  //old_level = intr_disable ();
+  old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //t->status = THREAD_READY;
-  fu_insert_thread_elem(t, &ready_list);
-  //intr_set_level (old_level);
+  list_push_back (&ready_list, &t->elem);
+  t->status = THREAD_READY;
+  intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -331,13 +314,12 @@ thread_yield (void)
   
   ASSERT (!intr_context ());
 
-  //TODO:delete redundant code
-  //old_level = intr_disable ();
-  if (cur != idle_thread)
-    fu_insert_thread_elem(cur, &ready_list);
-  //cur->status = THREAD_READY;
-  //schedule ();
-  //intr_set_level (old_level);
+  old_level = intr_disable ();
+  if (cur != idle_thread) 
+    list_push_back (&ready_list, &cur->elem);
+  cur->status = THREAD_READY;
+  schedule ();
+  intr_set_level (old_level);
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -490,10 +472,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  //TODO : ehy are interrupts disabled here?
   old_level = intr_disable ();
-  //inserts threads regardless of their priority
-  list_push_back(&all_list, &t->allelem);
+  list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
 
@@ -610,65 +590,3 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
-//the thread is inserted into the given list, ordered by priority
-//the bool variable states if the given list is the ready list
-//I don't need a bool variable ... TODO erase this
-static void fu_insert_thread_elem(struct thread *th, struct list *l)
-{
-  //check function parameters
-  ASSERT(th != NULL);
-  ASSERT(l != NULL);
-
-  //insert the thread in the list
-  //TODO list, list_elem, list_less_function, aux
-  list_insert_ordered(l, &th->elem, fu_comp_priority, NULL);
-
-  //in case the list  pointer points to the ready_list
-  if(l == &ready_list)
-  {
-    th->status = THREAD_READY;
-    //if the first element of the list has higher priority than the
-    //running_thread schedule
-    if(list_entry(list_front(l), struct thread, elem)->priority >
-        thread_current()->priority)
-    {
-        //change state of currently running thread
-        thread_current()->status = THREAD_READY;
-        //I have to enable interrupts so that I can call schedule
-        intr_disable();
-        //swaps the currently running thread
-        schedule();
-        //since schedule is the only place where I need to enable interrupts, I
-        //will now disable them
-        intr_enable();
-    }
-  }
-  else
-  {
-    //if l is a list held by a lock
-    th->status = THREAD_BLOCKED;
-  }
-}
-
-//comparison function for ready_list and lists held by locks
-//the list which it will sort is the third parameter
-static bool fu_comp_priority(const struct list_elem *a,
-                             const struct list_elem *b,
-                             void *aux)
-{
-  ASSERT(a != NULL);
-  ASSERT(b != NULL);
-  //there is no auxiliary parameter
-  ASSERT(aux == NULL);
-
-  //obtains the threads which are encompassing those elements
-  struct thread *t_a = list_entry(a, struct thread, elem);
-  struct thread *t_b = list_entry(b, struct thread, elem);
-
-  ASSERT(t_a != NULL);
-  ASSERT(t_b != NULL);
-
-  //establishes decresing ordering
-  return t_a->priority > t_b->priority;
-}
