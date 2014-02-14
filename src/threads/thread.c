@@ -258,13 +258,11 @@ thread_unblock (struct thread *t)
 
   ASSERT (is_thread (t));
 
-  //TODO delete useless code
-  //there is no need for interrupts when a thread is unblocked
-  //old_level = intr_disable ();
+  //is called indirectly by timer_interrupt
+  old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  //t->status = THREAD_READY;
   fu_insert_thread_elem(t, &ready_list);
-  //intr_set_level (old_level);
+  intr_set_level (old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -331,13 +329,10 @@ thread_yield (void)
   
   ASSERT (!intr_context ());
 
-  //TODO:delete redundant code
-  //old_level = intr_disable ();
+  old_level = intr_disable ();
   if (cur != idle_thread)
     fu_insert_thread_elem(cur, &ready_list);
-  //cur->status = THREAD_READY;
-  //schedule ();
-  //intr_set_level (old_level);
+  intr_set_level (old_level);
 }
 
 /* Invoke function 'func' on all threads, passing along 'aux'.
@@ -614,15 +609,23 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 //the thread is inserted into the given list, ordered by priority
 //the bool variable states if the given list is the ready list
 //I don't need a bool variable ... TODO erase this
-static void fu_insert_thread_elem(struct thread *th, struct list *l)
+static void
+fu_insert_thread_elem(struct thread *th, struct list *l)
 {
   //check function parameters
   ASSERT(th != NULL);
   ASSERT(l != NULL);
 
+  //checks whether scheduler will be called
+  bool b_will_schedule_threads = false;
+
   //insert the thread in the list
   //TODO list, list_elem, list_less_function, aux
-  list_insert_ordered(l, &th->elem, fu_comp_priority, NULL);
+  //compare with idle thread, which is stored by reference
+  if(th != idle_thread)
+  {
+    list_insert_ordered(l, &th->elem, fu_comp_priority, NULL);
+  }
 
   //in case the list  pointer points to the ready_list
   if(l == &ready_list)
@@ -630,24 +633,34 @@ static void fu_insert_thread_elem(struct thread *th, struct list *l)
     th->status = THREAD_READY;
     //if the first element of the list has higher priority than the
     //running_thread schedule
-    if(list_entry(list_front(l), struct thread, elem)->priority >
-        thread_current()->priority)
+    //or if the thread which has to be inserted is the currently running thread
+    if(th == thread_current() ||
+       list_entry(list_front(l), struct thread, elem)->priority >
+       thread_current()->priority)
     {
         //change state of currently running thread
         thread_current()->status = THREAD_READY;
-        //I have to enable interrupts so that I can call schedule
-        intr_disable();
-        //swaps the currently running thread
-        schedule();
-        //since schedule is the only place where I need to enable interrupts, I
-        //will now disable them
-        intr_enable();
+        b_will_schedule_threads = true;
     }
   }
   else
   {
-    //if l is a list held by a lock
+    //this can only get called by thread_block
+    ASSERT(th == thread_current());
     th->status = THREAD_BLOCKED;
+    b_will_schedule_threads = true;
+  }
+
+  if(b_will_schedule_threads)
+  {
+    //I have to disable interrupts so that I can call schedule
+    enum intr_level old_level = intr_get_level();
+    intr_disable();
+    //swaps the currently running thread
+    schedule();
+    //since schedule is the only place where I need to enable interrupts, I
+    //will now enable them
+    intr_set_level(old_level);
   }
 }
 
@@ -655,12 +668,10 @@ static void fu_insert_thread_elem(struct thread *th, struct list *l)
 //the list which it will sort is the third parameter
 static bool fu_comp_priority(const struct list_elem *a,
                              const struct list_elem *b,
-                             void *aux)
+                             void *aux UNUSED)
 {
   ASSERT(a != NULL);
   ASSERT(b != NULL);
-  //there is no auxiliary parameter
-  ASSERT(aux == NULL);
 
   //obtains the threads which are encompassing those elements
   struct thread *t_a = list_entry(a, struct thread, elem);
