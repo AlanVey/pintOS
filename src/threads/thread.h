@@ -146,4 +146,8 @@ bool fu_comp_priority(const struct list_elem *a,
                       const struct list_elem *b,
                       void *aux UNUSED);
 
+//returns true if head of the ready list has a higher priority than the
+//currently running thread
+bool fu_necessary_to_yield(void);
+
 #endif /* threads/thread.h */

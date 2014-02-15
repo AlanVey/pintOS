@@ -118,16 +118,15 @@ sema_up (struct semaphore *sema)
   struct thread *t_first_waiting = NULL;
   if (!list_empty (&sema->waiters))
   {
-    t_first_waiting = list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem);
+    t_first_waiting = list_entry(list_pop_front(&sema->waiters),
+                                 struct thread, elem);
     thread_unblock(t_first_waiting);
   }
   sema->value++;
 
   //the current thread will yield in case the unblocked thread has higher priority
   //this works because sema_up works only when there isn't an interrupt context
-  if(t_first_waiting != NULL &&
-     t_first_waiting->priority > thread_current()->priority)
+  if(fu_necessary_to_yield())
   {
     thread_yield();
   }

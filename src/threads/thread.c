@@ -134,7 +134,7 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
+  if (++thread_ticks >= TIME_SLICE || fu_necessary_to_yield())
     intr_yield_on_return ();
 }
 
@@ -246,8 +246,6 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, fu_comp_priority, NULL);
   t->status = THREAD_READY;
-  //if the awaken thread has higher priority than the running thread,
-  //it is scheduled to run
   intr_set_level (old_level);
 }
 
@@ -345,13 +343,25 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  //this can only be called by a thread
+  ASSERT(!intr_context());
+
+  //if the current thread no longer has the highesy priority, it yields
+  //a lock is needed to avoid race conditions
+  struct lock lo_allow_yield;
+  lock_init(&lo_allow_yield);
+
+  //TODO:change this in case sema_up changes
+  lock_acquire(&lo_allow_yield);
   thread_current ()->priority = new_priority;
+  lock_release(&lo_allow_yield);//this will call fu_necessary_to_yield
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
+  //this can be called from an interrupt context as well
   return thread_current ()->priority;
 }
 
@@ -595,9 +605,10 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 //comparison function for ready_list and lists held by locks
 //the list which it will sort is the third parameter
-bool fu_comp_priority(const struct list_elem *a,
-                      const struct list_elem *b,
-                      void *aux UNUSED)
+bool
+fu_comp_priority(const struct list_elem *a,
+                 const struct list_elem *b,
+                 void *aux UNUSED)
 {
   ASSERT(a != NULL);
   ASSERT(b != NULL);
@@ -611,4 +622,17 @@ bool fu_comp_priority(const struct list_elem *a,
 
   //establishes decresing ordering
   return t_a->priority > t_b->priority;
+}
+
+//access to this function should be synchronized
+//TODO:how can I check that?
+bool
+fu_necessary_to_yield(void)
+{
+  if(list_empty(&ready_list))
+  {
+    return false;
+  }
+  return list_entry(list_front(&ready_list), struct thread, elem)->priority >
+         thread_get_priority();
 }
