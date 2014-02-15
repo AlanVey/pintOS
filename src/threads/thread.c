@@ -70,7 +70,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -245,8 +244,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, fu_comp_priority, NULL);
   t->status = THREAD_READY;
+  //if the awaken thread has higher priority than the running thread,
+  //it is scheduled to run
   intr_set_level (old_level);
 }
 
@@ -316,9 +317,10 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, fu_comp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
+  if (cur != idle_thread)
   intr_set_level (old_level);
 }
 
@@ -590,3 +592,23 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+//comparison function for ready_list and lists held by locks
+//the list which it will sort is the third parameter
+bool fu_comp_priority(const struct list_elem *a,
+                      const struct list_elem *b,
+                      void *aux UNUSED)
+{
+  ASSERT(a != NULL);
+  ASSERT(b != NULL);
+
+  //obtains the threads which are encompassing those elements
+  struct thread *t_a = list_entry(a, struct thread, elem);
+  struct thread *t_b = list_entry(b, struct thread, elem);
+
+  ASSERT(t_a != NULL);
+  ASSERT(t_b != NULL);
+
+  //establishes decresing ordering
+  return t_a->priority > t_b->priority;
+}
