@@ -498,10 +498,31 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
+  struct thread *next;
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  {
+    //Old default
+    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    if(!thread_mlfqs)
+      next = priority_scheduler();
+    else
+      next = advanced_sheduler();
+    return list_entry (next, struct thread, elem)
+  }
+}
+
+static struct thread *
+priority_scheduler (void) 
+{
+
+}
+
+static struct thread *
+advanced_scheduler (void) 
+{
+
 }
 
 /* Completes a thread switch by activating the new thread's page
