@@ -3,6 +3,8 @@
 
 #include <list.h>
 #include <stdbool.h>
+#include <hash.h>
+#include <debug.h>
 
 /* A counting semaphore. */
 struct semaphore 
@@ -21,6 +23,13 @@ void sema_self_test (void);
 struct lock 
   {
     struct thread *holder;      /* Thread holding lock (for debugging). */
+    //the maximum priority which a list can provide to its current holder
+    //the maximum between the waiter's priorities
+    //set to the holder's own priority when the lock is acquired
+    //this is for efficiency reasons, the locks which can't give a better
+    //priority are not added to the hash
+    struct hash_elem he;
+    int i_lock_priority;
     struct semaphore semaphore; /* Binary semaphore controlling access. */
   };
 
@@ -40,6 +49,20 @@ void cond_init (struct condition *);
 void cond_wait (struct condition *, struct lock *);
 void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
+
+//priority donation
+void fu_donate_priority(struct lock *l, int i_waiter_priority);
+
+//comparison function for hash which holds locks and orderes them by their 
+//priority
+bool
+fu_hcomp_locks(const struct hash_elem *a,
+               const struct hash_elem *b,
+               void *aux UNUSED);
+
+//creates a hash for a given lock based on its address
+unsigned int
+fu_hash_locks(const struct hash_elem *he, void *aux UNUSED);
 
 /* Optimization barrier.
 

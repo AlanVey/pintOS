@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <hash.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,6 +24,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define m_valid_priority(p) (PRI_MIN <= p && p <= PRI_MAX)
 
 /* A kernel thread or user process.
 
@@ -86,11 +88,12 @@ struct thread
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
-    //TODO remove comment beneath
-    //I don't need to know when a thread started to sleep for now
-    //int64_t started_sleeping;           /* moment when variable started sleepin */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int own_priority;                   /* The thread's intrinsic priority */
+    //this records pairs of prioritity values as keys and locks from which it
+    //has received them as values
+    struct hash h_locks_held;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -141,6 +144,9 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+//if a thread is on the ready list and its priority changes
+void thread_reinsert(struct thread *t);
+
 //comparison function for ready list and for lists used by locks
 bool fu_comp_priority(const struct list_elem *a,
                       const struct list_elem *b,
@@ -149,5 +155,6 @@ bool fu_comp_priority(const struct list_elem *a,
 //returns true if head of the ready list has a higher priority than the
 //currently running thread
 bool fu_necessary_to_yield(void);
+
 
 #endif /* threads/thread.h */

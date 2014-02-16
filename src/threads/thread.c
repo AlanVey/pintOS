@@ -203,6 +203,9 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  //initializes hash
+  hash_init(&t->h_locks_held, fu_hash_locks, fu_hcomp_locks, NULL);
+
   intr_set_level (old_level);
 
   struct lock l_allow_to_run;
@@ -211,6 +214,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
   //if a thread with higher priority gets created, it gets scheduled to run
+  //the lock_release function indirectly calls the scheduler
   lock_release(&l_allow_to_run);
 
   return tid;
@@ -611,6 +615,7 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 //comparison function for ready_list and lists held by locks
 //the list which it will sort is the third parameter
+////TODO change name to fu_lcomp_priority
 bool
 fu_comp_priority(const struct list_elem *a,
                  const struct list_elem *b,
@@ -641,4 +646,12 @@ fu_necessary_to_yield(void)
   }
   return list_entry(list_front(&ready_list), struct thread, elem)->priority >
          thread_get_priority();
+}
+
+//reinserts a thread which was changed
+void thread_reinsert(struct thread *t)
+{
+  ASSERT(t->status == THREAD_READY);
+  list_insert_ordered(&ready_list, &t->elem, fu_comp_priority, NULL);
+  return;
 }

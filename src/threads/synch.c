@@ -191,6 +191,7 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+  lock->i_lock_priority = 0;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -209,8 +210,13 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  //every thread which tries to get a lock donates its priority
+  //there are no querries so there should be no race problems
+  fu_donate_priority(lock, thread_get_priority());
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  //donates the running thread's own priority
+  fu_donate_priority(lock, lock->holder->own_priority);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -244,8 +250,32 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  //remember the current thread and assign it the maximum priority so that
+  //there will be no race conditions between releasing the semaphore and
+  //updating its priority
+  struct thread *t = lock->holder;
   lock->holder = NULL;
+  thread_set_priority(PRI_MAX);
+  //by setting it to 0 before releasing the lock, we're making sure that
+  //no donation will be lost
+  lock->i_lock_priority = 0;
+
   sema_up (&lock->semaphore);
+
+  //check that no other thread comes here first
+  ASSERT(thread_current() == t);
+  hash_delete(&t->h_locks_held, &lock->he);
+
+  //extract maximum
+  struct hash_iterator hi;
+  hash_first(&hi, &t->h_locks_held);
+  int i_max_hash_priority = hash_entry(hash_next(&hi), struct lock, he)
+                            ->i_lock_priority;
+  ASSERT(m_valid_priority(i_max_hash_priority));
+
+  int i_new_priority = t->own_priority > i_max_hash_priority ?
+                       t->own_priority : i_max_hash_priority ;
+  thread_set_priority(i_new_priority);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -348,4 +378,81 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+//comparison function for hash which holds locks and orderes them by their 
+//priority
+bool
+fu_hcomp_locks(const struct hash_elem *a,
+              const struct hash_elem *b,
+              void *aux UNUSED)
+{
+  ASSERT(a != NULL);
+  ASSERT(b != NULL);
+
+  //obtains the threads which are encompassing those elements
+  struct lock *l_a = hash_entry(a, struct lock, he);
+  struct lock *l_b = hash_entry(b, struct lock, he);
+
+  ASSERT(l_a != NULL);
+  ASSERT(l_b != NULL);
+
+  //establishes decresing ordering
+  return l_a->i_lock_priority > l_b->i_lock_priority;
+}
+
+unsigned int
+fu_hash_locks(const struct hash_elem *he_cur, void *aux UNUSED)
+{
+  ASSERT(he_cur != NULL);
+  const struct lock *l = hash_entry(he_cur, struct lock, he);
+  //hashes a lock based upon its location in memory
+  return hash_bytes(l, sizeof l);
+}
+
+//a thread gives its priority to the lock
+//which could modify the holder's priority
+void fu_donate_priority(struct lock *l, int i_waiter_priority)
+{
+  ASSERT(l != NULL);
+  ASSERT(m_valid_priority(i_waiter_priority));
+  ASSERT(m_valid_priority(l->i_lock_priority));
+  //there is a danger in case of a race
+  //if the holder of the list changes, than this could add useless elements to
+  //the hash
+  struct semaphore *se;
+  sema_init(se, 1);
+  sema_down(se);
+  //recursively goes through all locks in its path
+  //as long as it can give a higher priority
+  if(i_waiter_priority > l->i_lock_priority)
+  {
+    l->i_lock_priority = i_waiter_priority;
+    //the lock adds itself to the holder's hash
+    struct thread *t = l->holder;
+    ASSERT(m_valid_priority(t->priority));
+
+    hash_replace(&t->h_locks_held, &l->he);
+
+    if(l->i_lock_priority > t->priority)
+    {
+      //can not be the running thread
+      ASSERT(t->status == THREAD_RUNNING ||
+             t->status == THREAD_BLOCKED);
+      //the lock changes the holder's priority
+      t->priority = l->i_lock_priority;
+      //the lock holder gets reinserted in the ready list_init
+      if(t->status == THREAD_BLOCKED)
+      {
+        thread_unblock(t);
+      }
+      else
+      {
+        //reinsert the given thread into the ready list taking into account its
+        //priority
+        thread_reinsert(t);
+      }
+    }
+  }
+  sema_up(se);
 }
