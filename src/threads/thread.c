@@ -205,8 +205,13 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
+  struct lock l_allow_to_run;
+  lock_init(&l_allow_to_run);
+  lock_acquire(&l_allow_to_run);
   /* Add to run queue. */
   thread_unblock (t);
+  //if a thread with higher priority gets created, it gets scheduled to run
+  lock_release(&l_allow_to_run);
 
   return tid;
 }
@@ -246,6 +251,7 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_insert_ordered (&ready_list, &t->elem, fu_comp_priority, NULL);
   t->status = THREAD_READY;
+  //DO NOT place a call to thread_yield here, it will block the semaphores
   intr_set_level (old_level);
 }
 
