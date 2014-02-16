@@ -70,7 +70,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -135,7 +134,7 @@ thread_tick (void)
     kernel_ticks++;
 
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
+  if (++thread_ticks >= TIME_SLICE || fu_necessary_to_yield())
     intr_yield_on_return ();
 }
 
@@ -206,8 +205,13 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
+  struct lock l_allow_to_run;
+  lock_init(&l_allow_to_run);
+  lock_acquire(&l_allow_to_run);
   /* Add to run queue. */
   thread_unblock (t);
+  //if a thread with higher priority gets created, it gets scheduled to run
+  lock_release(&l_allow_to_run);
 
   return tid;
 }
@@ -245,8 +249,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, fu_comp_priority, NULL);
   t->status = THREAD_READY;
+  //DO NOT place a call to thread_yield here, it will block the semaphores
   intr_set_level (old_level);
 }
 
@@ -316,9 +321,10 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, fu_comp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
+  if (cur != idle_thread)
   intr_set_level (old_level);
 }
 
@@ -343,13 +349,25 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  //this can only be called by a thread
+  ASSERT(!intr_context());
+
+  //if the current thread no longer has the highesy priority, it yields
+  //a lock is needed to avoid race conditions
+  struct lock lo_allow_yield;
+  lock_init(&lo_allow_yield);
+
+  //TODO:change this in case sema_up changes
+  lock_acquire(&lo_allow_yield);
   thread_current ()->priority = new_priority;
+  lock_release(&lo_allow_yield);//this will call fu_necessary_to_yield
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
+  //this can be called from an interrupt context as well
   return thread_current ()->priority;
 }
 
@@ -611,3 +629,37 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+//comparison function for ready_list and lists held by locks
+//the list which it will sort is the third parameter
+bool
+fu_comp_priority(const struct list_elem *a,
+                 const struct list_elem *b,
+                 void *aux UNUSED)
+{
+  ASSERT(a != NULL);
+  ASSERT(b != NULL);
+
+  //obtains the threads which are encompassing those elements
+  struct thread *t_a = list_entry(a, struct thread, elem);
+  struct thread *t_b = list_entry(b, struct thread, elem);
+
+  ASSERT(t_a != NULL);
+  ASSERT(t_b != NULL);
+
+  //establishes decresing ordering
+  return t_a->priority > t_b->priority;
+}
+
+//access to this function should be synchronized
+//TODO:how can I check that?
+bool
+fu_necessary_to_yield(void)
+{
+  if(list_empty(&ready_list))
+  {
+    return false;
+  }
+  return list_entry(list_front(&ready_list), struct thread, elem)->priority >
+         thread_get_priority();
+}
