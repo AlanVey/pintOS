@@ -368,7 +368,7 @@ thread_set_priority (int new_priority)
 
   //TODO:change this in case sema_up changes
   sema_down(&se_allow_yield);
-  thread_current ()->priority = new_priority;
+  thread_current()->priority = new_priority;
   sema_up(&se_allow_yield);//this will call fu_necessary_to_yield
 }
 
@@ -376,8 +376,30 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
-  //this can be called from an interrupt context as well
-  return thread_current ()->priority;
+  return fu_thread_get_priority(thread_current());
+}
+
+int
+fu_thread_get_priority(struct thread *t)
+{
+  if(t->b_false_maximum_priority)
+  {
+    return PRI_MAX;
+  }
+  //extract maximum
+  int i_max_list_priority = -1;
+  if(!list_empty(&t->l_locks_held))
+  {
+    i_max_list_priority = list_entry(list_front(&t->l_locks_held),
+                                     struct lock, le)->i_lock_priority;
+    ASSERT(m_valid_priority(i_max_list_priority));
+  }
+
+  int i_new_priority = t->priority > i_max_list_priority ?
+                       t->priority : i_max_list_priority ;
+
+  ASSERT(m_valid_priority(i_new_priority));
+  return i_new_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -497,7 +519,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->own_priority = priority;
+  t->b_false_maximum_priority = false;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -638,7 +660,8 @@ fu_comp_priority(const struct list_elem *a,
   ASSERT(t_b != NULL);
 
   //establishes decresing ordering
-  return t_a->priority > t_b->priority;
+  return fu_thread_get_priority(t_a) >
+         fu_thread_get_priority(t_b);
 }
 
 //access to this function should be synchronized
@@ -650,8 +673,8 @@ fu_necessary_to_yield(void)
   {
     return false;
   }
-  return list_entry(list_front(&ready_list), struct thread, elem)->priority >
-         thread_get_priority();
+  struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+  return fu_thread_get_priority(t) > thread_get_priority();
 }
 
 //reinserts a thread which was changed

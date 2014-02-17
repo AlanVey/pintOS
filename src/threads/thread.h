@@ -89,9 +89,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int own_priority;                   /* The thread's intrinsic priority */
-    //list containing all locks which have a higher priority than the thread's
-    //own_priority
+    bool b_false_maximum_priority;      //can prevent a thread from beeing
+                                        //interrupted
+    //list containing all locks held by the thread
+    //even those with lower priority just in case this thread lowers its
+    //priority
     struct list l_locks_held;
     struct list_elem allelem;           /* List element for all threads list. */
 
@@ -137,6 +139,9 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+
+//gets another thread's priority
+int fu_thread_get_priority(struct thread *t);
 
 int thread_get_nice (void);
 void thread_set_nice (int);

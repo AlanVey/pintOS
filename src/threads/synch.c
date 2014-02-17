@@ -221,8 +221,9 @@ lock_acquire (struct lock *lock)
   lock->holder = thread_current();
   list_insert_ordered(&lock->holder->l_locks_held, &lock->le,
                       fu_lcomp_locks, NULL);
+  //do not do the following:
   //donates the running thread's own priority
-  fu_donate_priority(lock, lock->holder->own_priority);
+  //just in case the thread diminishes its priority
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -261,7 +262,9 @@ lock_release (struct lock *lock)
   //updating its priority
   struct thread *t = lock->holder;
   lock->holder = NULL;
-  thread_set_priority(PRI_MAX);
+  //TODO: change with something less hacky
+  //changes priority temporarily
+  thread_current()->b_false_maximum_priority;
   //by setting it to 0 before releasing the lock, we're making sure that
   //no donation will be lost
   lock->i_lock_priority = 0;
@@ -271,19 +274,6 @@ lock_release (struct lock *lock)
   //check that no other thread comes here first
   ASSERT(thread_current() == t);
   list_remove(&lock->le);
-
-  //extract maximum
-  int i_max_list_priority = -1;
-  if(!list_empty(&t->l_locks_held))
-  {
-    i_max_list_priority = list_entry(list_front(&t->l_locks_held),
-                                     struct lock, le);
-    ASSERT(m_valid_priority(i_max_list_priority));
-  }
-
-  int i_new_priority = t->own_priority > i_max_list_priority ?
-                       t->own_priority : i_max_list_priority ;
-  thread_set_priority(i_new_priority);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -432,7 +422,7 @@ static void fu_donate_priority(struct lock *l, int i_waiter_priority)
     {
       //the lock adds itself to the holder's list
       struct thread *t = l->holder;
-      ASSERT(m_valid_priority(t->priority));
+      ASSERT(m_valid_priority(fu_thread_get_priority(t)));
 
       //if the lock is already in the list it gets removed
       if(list_entry(&l->le, struct lock, le) != NULL)
@@ -441,13 +431,11 @@ static void fu_donate_priority(struct lock *l, int i_waiter_priority)
       }
       list_insert_ordered(&t->l_locks_held, &l->le, fu_lcomp_locks, NULL);
 
-      if(l->i_lock_priority > t->priority)
+      if(l->i_lock_priority > fu_thread_get_priority(t))
       {
         //can not be the running thread
         ASSERT(t->status == THREAD_READY ||
                t->status == THREAD_BLOCKED);
-        //the lock changes the holder's priority
-        t->priority = l->i_lock_priority;
         //the lock holder gets reinserted in the ready list_init
         if(t->status == THREAD_BLOCKED)
         {
