@@ -4,7 +4,6 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-#include <hash.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -91,9 +90,9 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int own_priority;                   /* The thread's intrinsic priority */
-    //this records pairs of prioritity values as keys and locks from which it
-    //has received them as values
-    struct hash h_locks_held;
+    //list containing all locks which have a higher priority than the thread's
+    //own_priority
+    struct list l_locks_held;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
