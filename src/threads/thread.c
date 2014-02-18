@@ -96,6 +96,8 @@ thread_init (void)
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
+  //initializes list for the initial thread
+  list_init(&initial_thread->l_locks_held);
   initial_thread->tid = allocate_tid ();
 }
 
@@ -182,6 +184,8 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  //initializes list for the initial thread
+  list_init(&t->l_locks_held);
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -211,6 +215,7 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
   //if a thread with higher priority gets created, it gets scheduled to run
+  //the lock_release function indirectly calls the scheduler
   lock_release(&l_allow_to_run);
 
   return tid;
@@ -243,6 +248,7 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
+  ASSERT(t != NULL);
   enum intr_level old_level;
 
   ASSERT (is_thread (t));
@@ -315,6 +321,7 @@ void
 thread_yield (void) 
 {
   struct thread *cur = thread_current ();
+  ASSERT(cur != NULL);
   enum intr_level old_level;
   
   ASSERT (!intr_context ());
@@ -353,22 +360,46 @@ thread_set_priority (int new_priority)
   ASSERT(!intr_context());
 
   //if the current thread no longer has the highesy priority, it yields
-  //a lock is needed to avoid race conditions
-  struct lock lo_allow_yield;
-  lock_init(&lo_allow_yield);
+  //a semaphore is needed to avoid race conditions
+  //I'm using a semaphore and not a lock because I use this function in the
+  //definition of locks
+  struct semaphore se_allow_yield;
+  sema_init(&se_allow_yield, 1);
 
   //TODO:change this in case sema_up changes
-  lock_acquire(&lo_allow_yield);
-  thread_current ()->priority = new_priority;
-  lock_release(&lo_allow_yield);//this will call fu_necessary_to_yield
+  sema_down(&se_allow_yield);
+  thread_current()->priority = new_priority;
+  sema_up(&se_allow_yield);//this will call fu_necessary_to_yield
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  //this can be called from an interrupt context as well
-  return thread_current ()->priority;
+  return fu_thread_get_priority(thread_current());
+}
+
+int
+fu_thread_get_priority(struct thread *t)
+{
+  if(t->b_false_maximum_priority)
+  {
+    return PRI_MAX;
+  }
+  //extract maximum
+  int i_max_list_priority = -1;
+  if(!list_empty(&t->l_locks_held))
+  {
+    i_max_list_priority = list_entry(list_front(&t->l_locks_held),
+                                     struct lock, le)->i_lock_priority;
+    ASSERT(m_valid_priority(i_max_list_priority));
+  }
+
+  int i_new_priority = t->priority > i_max_list_priority ?
+                       t->priority : i_max_list_priority ;
+
+  ASSERT(m_valid_priority(i_new_priority));
+  return i_new_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -488,6 +519,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->b_false_maximum_priority = false;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
@@ -632,6 +664,7 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 //comparison function for ready_list and lists held by locks
 //the list which it will sort is the third parameter
+////TODO change name to fu_lcomp_priority
 bool
 fu_comp_priority(const struct list_elem *a,
                  const struct list_elem *b,
@@ -648,7 +681,8 @@ fu_comp_priority(const struct list_elem *a,
   ASSERT(t_b != NULL);
 
   //establishes decresing ordering
-  return t_a->priority > t_b->priority;
+  return fu_thread_get_priority(t_a) >
+         fu_thread_get_priority(t_b);
 }
 
 //access to this function should be synchronized
@@ -660,6 +694,16 @@ fu_necessary_to_yield(void)
   {
     return false;
   }
-  return list_entry(list_front(&ready_list), struct thread, elem)->priority >
-         thread_get_priority();
+  struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+  return fu_thread_get_priority(t) > thread_get_priority();
+}
+
+//reinserts a thread which was changed
+void thread_reinsert(struct thread *t)
+{
+  ASSERT(t != NULL);
+  ASSERT(t->status == THREAD_READY);
+  list_remove(&t->elem);
+  list_insert_ordered(&ready_list, &t->elem, fu_comp_priority, NULL);
+  return;
 }

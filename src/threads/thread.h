@@ -23,6 +23,7 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define m_valid_priority(p) (PRI_MIN <= p && p <= PRI_MAX)
 
 /* A kernel thread or user process.
 
@@ -86,11 +87,14 @@ struct thread
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
-    //TODO remove comment beneath
-    //I don't need to know when a thread started to sleep for now
-    //int64_t started_sleeping;           /* moment when variable started sleepin */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    bool b_false_maximum_priority;      //can prevent a thread from beeing
+                                        //interrupted
+    //list containing all locks held by the thread
+    //even those with lower priority just in case this thread lowers its
+    //priority
+    struct list l_locks_held;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -136,10 +140,16 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+//gets another thread's priority
+int fu_thread_get_priority(struct thread *t);
+
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+//if a thread is on the ready list and its priority changes
+void thread_reinsert(struct thread *t);
 
 //comparison function for ready list and for lists used by locks
 bool fu_comp_priority(const struct list_elem *a,
@@ -149,5 +159,6 @@ bool fu_comp_priority(const struct list_elem *a,
 //returns true if head of the ready list has a higher priority than the
 //currently running thread
 bool fu_necessary_to_yield(void);
+
 
 #endif /* threads/thread.h */
