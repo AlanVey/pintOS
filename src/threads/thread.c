@@ -647,29 +647,10 @@ next_thread_to_run (void)
   struct thread *next;
   if (list_empty (&ready_list))
     return idle_thread;
-  else
-  {
-    //Old default
-    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    if(!thread_mlfqs)
-      next = priority_scheduler();
-    else
-      next = advanced_sheduler();
-    return list_entry (next, struct thread, elem)
-  }
+
+  return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
-static struct thread *
-priority_scheduler (void) 
-{
-
-}
-
-static struct thread *
-advanced_scheduler (void) 
-{
-
-}
 
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
