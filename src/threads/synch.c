@@ -72,12 +72,12 @@ sema_down (struct semaphore *sema)
 
   old_level = intr_disable ();
   while (sema->value == 0) 
-    {
+  {
       struct thread *t = thread_current();
       ASSERT(&t->elem != NULL);
       list_insert_ordered (&sema->waiters, &t->elem, fu_comp_priority, NULL);
       thread_block ();
-    }
+  }
   sema->value--;
   intr_set_level (old_level);
 }
@@ -132,6 +132,7 @@ sema_up (struct semaphore *sema)
 
   //the current thread will yield in case the unblocked thread has higher priority
   //this works because sema_up works only when there isn't an interrupt context
+  //can only be replaced by the thread which it has just unblocked
   if(fu_necessary_to_yield())
   {
     thread_yield();
@@ -196,7 +197,7 @@ lock_init (struct lock *lock)
 
   lock->holder = NULL;
   lock->i_lock_priority = 0;
-  sema_init (&lock->semaphore, 1);
+  list_init (&lock->waiters);
 }
 
 /* Acquires LOCK, sleeping until it becomes available if
@@ -214,16 +215,24 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  //every thread which tries to get a lock donates its priority
-  //there are no querries so there should be no race problems
-  fu_donate_priority(lock, thread_get_priority());
-  sema_down (&lock->semaphore);
+  enum intr_level old_level;
+
+  old_level = intr_disable ();
+
+  //the current thread can not wait on any other lock
+  struct thread *t = thread_current();
+  while (lock->holder != NULL) 
+  {
+      fu_donate_priority(lock, thread_get_priority());
+      ASSERT(&t->elem != NULL);
+      list_insert_ordered (&lock->waiters, &t->elem, fu_comp_priority, NULL);
+      thread_block ();
+  }
   lock->holder = thread_current();
   list_insert_ordered(&lock->holder->l_locks_held, &lock->le,
                       fu_lcomp_locks, NULL);
-  //do not do the following:
-  //donates the running thread's own priority
-  //just in case the thread diminishes its priority
+
+  intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -235,14 +244,22 @@ lock_acquire (struct lock *lock)
 bool
 lock_try_acquire (struct lock *lock)
 {
+  enum intr_level old_level;
   bool success;
 
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
 
-  success = sema_try_down (&lock->semaphore);
-  if (success)
+  old_level = intr_disable ();
+  if (lock->holder == NULL) 
+  {
     lock->holder = thread_current ();
+    success = true; 
+  }
+  else
+    success = false;
+  intr_set_level (old_level);
+
   return success;
 }
 
@@ -256,24 +273,46 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  ASSERT (!intr_context());
 
-  //remember the current thread and assign it the maximum priority so that
-  //there will be no race conditions between releasing the semaphore and
-  //updating its priority
-  struct thread *t = lock->holder;
-  lock->holder = NULL;
-  //TODO: change with something less hacky
-  //changes priority temporarily
-  thread_current()->b_false_maximum_priority;
-  //by setting it to 0 before releasing the lock, we're making sure that
-  //no donation will be lost
-  lock->i_lock_priority = 0;
+  enum intr_level old_level;
 
-  sema_up (&lock->semaphore);
+  old_level = intr_disable ();
+  if (!list_empty (&lock->waiters))
+  {
+    //remembers the first waiting thread
+    struct thread *t_first_waiting;
+    t_first_waiting = list_entry(list_pop_front(&lock->waiters),
+                                 struct thread, elem);
+    list_remove(&t_first_waiting->elem);
+    thread_unblock(t_first_waiting);
+  }
 
-  //check that no other thread comes here first
-  ASSERT(thread_current() == t);
+  //reset the priority of the list
+  if (!list_empty (&lock->waiters))
+  {
+    //the priority of the list becomes the priority of the second waiter
+    lock->i_lock_priority =  list_entry(list_front(&lock->waiters),
+                                     struct thread, elem)->priority;
+  }
+  else
+  {
+    lock->i_lock_priority = 0;
+  }
   list_remove(&lock->le);
+  lock->holder = NULL;
+
+  //the current thread will yield in case the unblocked thread has higher priority
+  //this works because lick_release works only when there isn't an interrupt context
+  //can only be replaced by the thread which it has just unblocked
+  //this must be placed in an interrupt-free context in order to guarantee that
+  //the highest priority thread is always running
+  if(fu_necessary_to_yield())
+  {
+    thread_yield();
+  }
+
+  intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -407,49 +446,43 @@ static void fu_donate_priority(struct lock *l, int i_waiter_priority)
   ASSERT(l != NULL);
   ASSERT(m_valid_priority(i_waiter_priority));
   ASSERT(m_valid_priority(l->i_lock_priority));
-  //there is a danger in case of a race
-  //if the holder of the list changes, than this could add useless elements to
-  //the list
-  struct semaphore se;
-  sema_init(&se, 1);
-  sema_down(&se);
-  //recursively goes through all locks in its path
-  //as long as it can give a higher priority
+  //when donnation takes place, there certainly is a lock holder
+  ASSERT(l->holder != NULL);
+
   if(i_waiter_priority > l->i_lock_priority)
   {
+    struct thread *t = l->holder;
+    //holder's priority unaffected by current thread's priority
+    int i_holder_priority = fu_thread_get_priority(t);
     l->i_lock_priority = i_waiter_priority;
-    if(l->holder != NULL)
+    ASSERT(m_valid_priority(i_holder_priority));
+
+    //if the lock is already in the list it gets removed
+    if(list_entry(&l->le, struct lock, le) != NULL)
     {
-      //the lock adds itself to the holder's list
-      struct thread *t = l->holder;
-      ASSERT(m_valid_priority(fu_thread_get_priority(t)));
+      list_remove(&l->le);
+    }
+    list_insert_ordered(&t->l_locks_held, &l->le, fu_lcomp_locks, NULL);
 
-      //if the lock is already in the list it gets removed
-      if(list_entry(&l->le, struct lock, le) != NULL)
+    //comparing the thread with it
+    if(l->i_lock_priority > i_holder_priority)
+    {
+      //can not be the running thread
+      ASSERT(t->status == THREAD_READY ||
+             t->status == THREAD_BLOCKED);
+      //the lock holder gets reinserted in the ready list_init
+      if(t->status == THREAD_BLOCKED)
       {
-        list_remove(&l->le);
+        list_remove(&t->elem);
+        thread_unblock(t);
       }
-      list_insert_ordered(&t->l_locks_held, &l->le, fu_lcomp_locks, NULL);
-
-      if(l->i_lock_priority > fu_thread_get_priority(t))
+      else
       {
-        //can not be the running thread
-        ASSERT(t->status == THREAD_READY ||
-               t->status == THREAD_BLOCKED);
-        //the lock holder gets reinserted in the ready list_init
-        if(t->status == THREAD_BLOCKED)
-        {
-          thread_unblock(t);
-        }
-        else
-        {
-          //reinsert the given thread into the ready list taking into account its
-          //priority
-          thread_reinsert(t);
-        }
+        //reinsert the given thread into the ready list taking into account its
+        //priority
+        thread_reinsert(t);
       }
     }
   }
-  sema_up(&se);
   return;
 }

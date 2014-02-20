@@ -27,7 +27,9 @@ struct lock
     //set to the holder's own priority when the lock is acquired
     struct list_elem le;
     int i_lock_priority;
-    struct semaphore semaphore; /* Binary semaphore controlling access. */
+    //removed the semaphore component of a lock because in a scheduler which
+    //implements priority donation they have entirely different purposes
+    struct list waiters;        /* List of waiting threads. */
   };
 
 void lock_init (struct lock *);
