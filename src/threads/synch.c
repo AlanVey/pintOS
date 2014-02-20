@@ -133,10 +133,7 @@ sema_up (struct semaphore *sema)
   //the current thread will yield in case the unblocked thread has higher priority
   //this works because sema_up works only when there isn't an interrupt context
   //can only be replaced by the thread which it has just unblocked
-  if(fu_necessary_to_yield())
-  {
-    thread_yield();
-  }
+  fu_necessary_to_yield();
   intr_set_level (old_level);
 }
 
@@ -307,10 +304,7 @@ lock_release (struct lock *lock)
   //can only be replaced by the thread which it has just unblocked
   //this must be placed in an interrupt-free context in order to guarantee that
   //the highest priority thread is always running
-  if(fu_necessary_to_yield())
-  {
-    thread_yield();
-  }
+  fu_necessary_to_yield();
 
   intr_set_level(old_level);
 }

@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "devices/timer.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -95,6 +96,11 @@ struct thread
     struct list l_locks_held;
     struct list_elem allelem;           /* List element for all threads list. */
 
+    //nice value of a thread
+    int32_t nice;
+    //how many resources has the thread used recently
+    int32_t recent_cpu;
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -154,9 +160,8 @@ bool fu_comp_priority(const struct list_elem *a,
                       const struct list_elem *b,
                       void *aux UNUSED);
 
-//returns true if head of the ready list has a higher priority than the
-//currently running thread
-bool fu_necessary_to_yield(void);
+//if the current thread no longer has the maximum priority, it will yield
+void fu_necessary_to_yield(void);
 
 
 #endif /* threads/thread.h */

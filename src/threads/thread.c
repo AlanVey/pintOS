@@ -54,6 +54,20 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+//load average of the advanced scheduler
+static int32_t load_avg = 0;
+
+#define NUMBER_OF_FRACTIONAL_BITS 14
+#define MULTIPLICATION (1<<NUMBER_OF_FRACTIONAL_BITS)
+#define ADJUST_SIZE 100
+#define LOAD_AVERAGE_DECAY 59
+//left intentionally without brackets so that multiplication be done before
+//division
+#define LOAD_AVERAGE_WEIGHT LOAD_AVERAGE_DECAY/(LOAD_AVERAGE_DECAY + 1)
+#define LOAD_AVERAGE_COMPLEMETARY_WEIGHT 1/(LOAD_AVERAGE_DECAY + 1)
+#define RCPU_ON_LOADAVG 2
+#define PRIORITY_ON_RCPU 1/4
+#define PRIORITY_ON_NICE 2
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -70,6 +84,15 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+//calculates load_avg every second
+static void
+fu_thread_compute_load_avg (void);
+//calculates recent_cpu every second
+static void
+fu_thread_compute_recent_cpu (struct thread *t, void *aux UNUSED);
+//calculates prioririty for the advanced scheduler
+static void
+fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -135,9 +158,30 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  //every second
+  if(timer_ticks()%TIMER_FREQ == 0)
+  {
+    //compute load average
+    fu_thread_compute_load_avg();
+    //optimization barier - compiler must not change the order of these
+    //function calls
+    barrier();
+    //compute recent cpu
+    thread_foreach(fu_thread_compute_recent_cpu, NULL);
+  }
+
   /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE || fu_necessary_to_yield())
-    intr_yield_on_return ();
+  if (++thread_ticks >= TIME_SLICE)
+  {
+    //compute priority based on recent_cpu
+    thread_foreach(fu_thread_compute_priority_advanced, NULL);
+    //recompute priority before sorting
+    barrier();
+    list_sort(&ready_list, fu_comp_priority, NULL);
+    //sort the ready list before considering yielding
+    barrier();
+    fu_necessary_to_yield();
+  }
 }
 
 /* Prints thread statistics. */
@@ -356,20 +400,11 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  //this can only be called by a thread
   ASSERT(!intr_context());
 
-  //if the current thread no longer has the highesy priority, it yields
-  //a semaphore is needed to avoid race conditions
-  //I'm using a semaphore and not a lock because I use this function in the
-  //definition of locks
-  struct semaphore se_allow_yield;
-  sema_init(&se_allow_yield, 1);
-
-  //TODO:change this in case sema_up changes
-  sema_down(&se_allow_yield);
   thread_current()->priority = new_priority;
-  sema_up(&se_allow_yield);//this will call fu_necessary_to_yield
+  //if it doesn't have the biggest priority, it will yield
+  fu_necessary_to_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -382,6 +417,10 @@ thread_get_priority (void)
 int
 fu_thread_get_priority(struct thread *t)
 {
+  //this is either called by the running thread or with interrupts disabled
+  //by the scheduler or by a synchronization primitive
+  ASSERT(t == thread_current() || intr_get_level() == INTR_OFF);
+
   //extract maximum
   int i_max_list_priority = -1;
   if(!list_empty(&t->l_locks_held))
@@ -395,39 +434,99 @@ fu_thread_get_priority(struct thread *t)
                        t->priority : i_max_list_priority ;
 
   ASSERT(m_valid_priority(i_new_priority));
+
   return i_new_priority;
+}
+
+//calculates priority for the advanced scheduler
+static void
+fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
+{
+  //this function can be called from an interrupt context by the scheduler
+  //or when a thread recomputes its nice value
+  ASSERT(t == thread_current() || intr_context());
+  //result is rounded down, not rounded to the nearest integer
+  uint32_t priority = PRI_MAX - t->recent_cpu * PRIORITY_ON_RCPU
+                              - thread_get_nice()* PRIORITY_ON_NICE;
+  t->priority = priority;
+  fu_necessary_to_yield();
+  return;
 }
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int nice) 
 {
-  /* Not yet implemented. */
+  ASSERT(!intr_context());
+  thread_current()->nice = nice;
+  fu_thread_compute_priority_advanced(thread_current(), NULL);
+  return;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  //added half the constant with which the load_avg is multiplied so that
+  //rounding should be done to the nearest integer
+  uint64_t storage = (uint64_t)load_avg * ADJUST_SIZE + MULTIPLICATION/2;
+  storage /= MULTIPLICATION;
+  return (uint32_t)storage;
+}
+
+//computes a new load average
+static void
+fu_thread_compute_load_avg (void)
+{
+  //this function is called from an interrupt context
+  ASSERT(intr_context());
+
+  //use 64 bits to avoid loosing precision
+  uint64_t storage;
+  storage = (uint64_t)thread_get_load_avg() * LOAD_AVERAGE_WEIGHT;
+  //brings to the same multiplication level
+  storage += MULTIPLICATION * list_size(&ready_list)
+                            * LOAD_AVERAGE_COMPLEMETARY_WEIGHT;
+  load_avg = storage;
+
+  return;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  uint64_t storage = (uint64_t)thread_get_recent_cpu() * ADJUST_SIZE
+                                                       + MULTIPLICATION/2;
+  storage /= MULTIPLICATION;
+  return (uint32_t)storage;
 }
+
+//computes the load average
+//for a given thread
+//called from interrupt context so there is no need to synchronize with
+//thread_get_average
+static void
+fu_thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
+{
+  //this function is called from an interrupt context
+  ASSERT(intr_context());
+
+  uint64_t storage;
+  storage = (uint64_t)t->recent_cpu * RCPU_ON_LOADAVG * thread_get_load_avg();
+  storage /= (RCPU_ON_LOADAVG*load_avg + 1);
+  //brings to the same multiplication level
+  storage += MULTIPLICATION * thread_current()->nice;
+  t->recent_cpu = storage;
+}
+
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -516,6 +615,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->nice = 0;
+  t->recent_cpu = 0;
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -659,17 +760,25 @@ fu_comp_priority(const struct list_elem *a,
          fu_thread_get_priority(t_b);
 }
 
-//access to this function should be synchronized
-//TODO:how can I check that?
-bool
+//this function has to be executed atomically,
+//otherwise the thread from the top of the list will be removed from its
+//position during an interrupt
+void
 fu_necessary_to_yield(void)
 {
-  if(list_empty(&ready_list))
+  enum intr_level old_level = intr_get_level();
+  intr_disable();
+  if(!list_empty(&ready_list))
   {
-    return false;
+    struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+    //no interrupt should appear here
+    if(fu_thread_get_priority(t) > thread_get_priority())
+    {
+      thread_yield();
+    }
   }
-  struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
-  return fu_thread_get_priority(t) > thread_get_priority();
+  intr_set_level(old_level);
+  return;
 }
 
 //reinserts a thread which was changed
