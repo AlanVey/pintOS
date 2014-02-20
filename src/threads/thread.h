@@ -89,8 +89,6 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    bool b_false_maximum_priority;      //can prevent a thread from beeing
-                                        //interrupted
     //list containing all locks held by the thread
     //even those with lower priority just in case this thread lowers its
     //priority

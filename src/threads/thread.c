@@ -382,10 +382,6 @@ thread_get_priority (void)
 int
 fu_thread_get_priority(struct thread *t)
 {
-  if(t->b_false_maximum_priority)
-  {
-    return PRI_MAX;
-  }
   //extract maximum
   int i_max_list_priority = -1;
   if(!list_empty(&t->l_locks_held))
@@ -519,7 +515,6 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->b_false_maximum_priority = false;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
