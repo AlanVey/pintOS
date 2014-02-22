@@ -217,7 +217,11 @@ lock_acquire (struct lock *lock)
   struct thread *t = thread_current();
   while (lock->holder != NULL) 
   {
-      fu_donate_priority(lock, thread_get_priority());
+      if(!thread_mlfqs)
+      {
+        //priority donation if we are NOT using the advanced scheduler
+        fu_donate_priority(lock, thread_get_priority());
+      }
       ASSERT(&t->elem != NULL);
       list_insert_ordered (&lock->waiters, &t->elem, fu_comp_priority, NULL);
       thread_block ();

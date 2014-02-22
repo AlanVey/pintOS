@@ -160,7 +160,7 @@ thread_tick (void)
     kernel_ticks++;
 
   //every second
-  /*if(timer_ticks()%TIMER_FREQ == 0)
+  if(thread_mlfqs && timer_ticks()%TIMER_FREQ == 0)
   {
     //compute load average
     fu_thread_compute_load_avg();
@@ -169,13 +169,17 @@ thread_tick (void)
     barrier();
     //compute recent cpu
     thread_foreach(fu_thread_compute_recent_cpu, NULL);
-  }*/
+  }
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
   {
-    //compute priority based on recent_cpu
-    //thread_foreach(fu_thread_compute_priority_advanced, NULL);
+    if(thread_mlfqs)
+    {
+      //compute priority based on recent_cpu
+      thread_foreach(fu_thread_compute_priority_advanced, NULL);
+    }
+
     //recompute priority before sorting
     barrier();
     list_sort(&ready_list, fu_comp_priority, NULL);
