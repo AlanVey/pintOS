@@ -217,18 +217,21 @@ lock_acquire (struct lock *lock)
   struct thread *t = thread_current();
   while (lock->holder != NULL) 
   {
-      if(!thread_mlfqs)
+      ASSERT(&t->elem != NULL);
+      if(thread_mlfqs == false)
       {
         //priority donation if we are NOT using the advanced scheduler
         fu_donate_priority(lock, thread_get_priority());
+        list_insert_ordered (&lock->waiters, &t->elem, fu_comp_priority, NULL);
       }
-      ASSERT(&t->elem != NULL);
-      list_insert_ordered (&lock->waiters, &t->elem, fu_comp_priority, NULL);
       thread_block ();
   }
   lock->holder = thread_current();
-  list_insert_ordered(&lock->holder->l_locks_held, &lock->le,
-                      fu_lcomp_locks, NULL);
+  if(thread_mlfqs == false)
+  {
+    list_insert_ordered(&lock->holder->l_locks_held, &lock->le,
+                        fu_lcomp_locks, NULL);
+  }
 
   intr_set_level (old_level);
 }
@@ -286,18 +289,26 @@ lock_release (struct lock *lock)
     thread_unblock(t_first_waiting);
   }
 
-  //reset the priority of the list
-  if (!list_empty (&lock->waiters))
+  if(thread_mlfqs == false)
   {
-    //the priority of the list becomes the priority of the second waiter
-    lock->i_lock_priority =  list_entry(list_front(&lock->waiters),
-                                     struct thread, elem)->priority;
+    //reset the priority of the list
+    if (!list_empty (&lock->waiters))
+    {
+      //the priority of the list becomes the priority of the second waiter
+      lock->i_lock_priority =  list_entry(list_front(&lock->waiters),
+                                       struct thread, elem)->priority;
+    }
+    else
+    {
+      lock->i_lock_priority = 0;
+    }
+    list_remove(&lock->le);
   }
   else
   {
-    lock->i_lock_priority = 0;
+    //if we are using the advanced scheduler, this list should be empty
+    ASSERT(list_empty(&lock->waiters));
   }
-  list_remove(&lock->le);
   lock->holder = NULL;
 
   fu_necessary_to_yield();
@@ -411,6 +422,7 @@ fu_lcomp_locks(const struct list_elem *a,
               const struct list_elem *b,
               void *aux UNUSED)
 {
+  ASSERT(thread_mlfqs == false);
   ASSERT(a != NULL);
   ASSERT(b != NULL);
 
@@ -429,6 +441,7 @@ fu_lcomp_locks(const struct list_elem *a,
 //which could modify the holder's priority
 static void fu_donate_priority(struct lock *l, int i_waiter_priority)
 {
+  ASSERT(thread_mlfqs == false);
   ASSERT(intr_get_level() == INTR_OFF);
   ASSERT(l != NULL);
   ASSERT(m_valid_priority(i_waiter_priority));

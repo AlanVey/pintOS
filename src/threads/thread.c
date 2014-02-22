@@ -58,17 +58,21 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 //load average of the advanced scheduler
 static int32_t load_avg = 0;
 
-#define NUMBER_OF_FRACTIONAL_BITS 14
-#define MULTIPLICATION (1<<NUMBER_OF_FRACTIONAL_BITS)
-#define ADJUST_SIZE 100
-#define LOAD_AVERAGE_DECAY 59
+//use const keyword instead of macros to facilitate debugging
+const uint32_t NUMBER_OF_FRACTIONAL_BITS = 14;
+const uint32_t MULTIPLICATION = 1<<14;//(1<<NUMBER_OF_FRACTIONAL_BITS);
+const uint32_t ADJUST_SIZE = 100;
+const uint32_t LOAD_AVERAGE_DECAY = 59;
 //left intentionally without brackets so that multiplication be done before
 //division
-#define LOAD_AVERAGE_WEIGHT LOAD_AVERAGE_DECAY/(LOAD_AVERAGE_DECAY + 1)
-#define LOAD_AVERAGE_COMPLEMETARY_WEIGHT 1/(LOAD_AVERAGE_DECAY + 1)
-#define RCPU_ON_LOADAVG 2
-#define PRIORITY_ON_RCPU 1/4
-#define PRIORITY_ON_NICE 2
+//LOAD_AVERAGE_DECAY/(LOAD_AVERAGE_DECAY + 1);
+const uint32_t LOAD_AVERAGE_PAST_WEIGHT = 59;
+//1/(LOAD_AVERAGE_DECAY + 1);
+const uint32_t LOAD_AVERAGE_COMPLEMETARY_WEIGHT = 1;
+const uint32_t LOAD_AVERAGE_TOTAL_WEIGHT = 60;
+const uint32_t RCPU_ON_LOADAVG = 2;
+const uint32_t PRIORITY_ON_RCPU_DIVISOR = 4;
+const uint32_t PRIORITY_ON_NICE = 2;
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -160,7 +164,7 @@ thread_tick (void)
     kernel_ticks++;
 
   //every second
-  if(thread_mlfqs && timer_ticks()%TIMER_FREQ == 0)
+  if(thread_mlfqs == true && timer_ticks()%TIMER_FREQ == 0)
   {
     //compute load average
     fu_thread_compute_load_avg();
@@ -174,7 +178,7 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
   {
-    if(thread_mlfqs)
+    if(thread_mlfqs == true)
     {
       //compute priority based on recent_cpu
       thread_foreach(fu_thread_compute_priority_advanced, NULL);
@@ -427,6 +431,11 @@ fu_thread_get_priority(struct thread *t)
   //can also be called from within a monitor
   ASSERT(t != NULL);
 
+  if(thread_mlfqs == true)
+  {
+    //the list of locks kept by a thread must be empty
+    ASSERT(list_empty(&t->l_locks_held));
+  }
   //extract maximum
   int i_max_list_priority = -1;
   if(!list_empty(&t->l_locks_held))
@@ -452,7 +461,7 @@ fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
   //or when a thread recomputes its nice value
   ASSERT(t == thread_current() || intr_context());
   //result is rounded down, not rounded to the nearest integer
-  uint32_t priority = PRI_MAX - t->recent_cpu * PRIORITY_ON_RCPU
+  uint32_t priority = PRI_MAX - t->recent_cpu / PRIORITY_ON_RCPU_DIVISOR
                               - thread_get_nice()* PRIORITY_ON_NICE;
   t->priority = priority;
   fu_necessary_to_yield();
@@ -496,10 +505,11 @@ fu_thread_compute_load_avg (void)
 
   //use 64 bits to avoid loosing precision
   uint64_t storage;
-  storage = (uint64_t)thread_get_load_avg() * LOAD_AVERAGE_WEIGHT;
+  storage = (uint64_t)thread_get_load_avg() * LOAD_AVERAGE_PAST_WEIGHT;
   //brings to the same multiplication level
-  storage += MULTIPLICATION * list_size(&ready_list)
+  storage += MULTIPLICATION * (list_size(&ready_list) + 1)
                             * LOAD_AVERAGE_COMPLEMETARY_WEIGHT;
+  storage /= LOAD_AVERAGE_TOTAL_WEIGHT;
   load_avg = storage;
 
   return;
@@ -799,11 +809,19 @@ fu_necessary_to_yield(void)
   if(!list_empty(&ready_list))
   {
     struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
+
     //no interrupt should appear here
     if(fu_thread_get_priority(t) > thread_get_priority())
     {
-      thread_yield();
-      return;
+      if(intr_context() == true)
+      {
+        intr_yield_on_return();
+      }
+      else
+      {
+        thread_yield();
+        return;
+      }
     }
   }
   intr_set_level(old_level);
