@@ -121,18 +121,15 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   //remembers the first waiting thread
-  struct thread *t_first_waiting = NULL;
   if (!list_empty (&sema->waiters))
   {
+    struct thread *t_first_waiting = NULL;
     t_first_waiting = list_entry(list_pop_front(&sema->waiters),
                                  struct thread, elem);
     thread_unblock(t_first_waiting);
   }
   sema->value++;
 
-  //the current thread will yield in case the unblocked thread has higher priority
-  //this works because sema_up works only when there isn't an interrupt context
-  //can only be replaced by the thread which it has just unblocked
   fu_necessary_to_yield();
   intr_set_level (old_level);
 }
@@ -277,8 +274,8 @@ lock_release (struct lock *lock)
   old_level = intr_disable ();
   if (!list_empty (&lock->waiters))
   {
-    //remembers the first waiting thread
     struct thread *t_first_waiting;
+    //remembers the first waiting thread
     t_first_waiting = list_entry(list_pop_front(&lock->waiters),
                                  struct thread, elem);
     list_remove(&t_first_waiting->elem);
@@ -299,13 +296,7 @@ lock_release (struct lock *lock)
   list_remove(&lock->le);
   lock->holder = NULL;
 
-  //the current thread will yield in case the unblocked thread has higher priority
-  //this works because lick_release works only when there isn't an interrupt context
-  //can only be replaced by the thread which it has just unblocked
-  //this must be placed in an interrupt-free context in order to guarantee that
-  //the highest priority thread is always running
   fu_necessary_to_yield();
-
   intr_set_level(old_level);
 }
 
@@ -320,12 +311,6 @@ lock_held_by_current_thread (const struct lock *lock)
   return lock->holder == thread_current ();
 }
 
-/* One semaphore in a list. */
-struct semaphore_elem 
-  {
-    struct list_elem elem;              /* List element. */
-    struct semaphore semaphore;         /* This semaphore. */
-  };
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
@@ -370,7 +355,8 @@ cond_wait (struct condition *cond, struct lock *lock)
   
   sema_init (&waiter.semaphore, 0);
   ASSERT(&waiter.elem != NULL);
-  list_insert_ordered (&cond->waiters, &waiter.elem, fu_comp_priority, NULL);
+  list_insert_ordered (&cond->waiters, &waiter.elem,
+                       fu_comp_priority, cond);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
@@ -437,6 +423,7 @@ fu_lcomp_locks(const struct list_elem *a,
 //which could modify the holder's priority
 static void fu_donate_priority(struct lock *l, int i_waiter_priority)
 {
+  ASSERT(intr_get_level() == INTR_OFF);
   ASSERT(l != NULL);
   ASSERT(m_valid_priority(i_waiter_priority));
   ASSERT(m_valid_priority(l->i_lock_priority));
@@ -474,7 +461,7 @@ static void fu_donate_priority(struct lock *l, int i_waiter_priority)
       {
         //reinsert the given thread into the ready list taking into account its
         //priority
-        thread_reinsert(t);
+        fu_thread_reinsert_ready_list(t);
       }
     }
   }

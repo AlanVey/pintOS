@@ -50,6 +50,7 @@ static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
+#define MAIN_TID 1
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
@@ -159,7 +160,7 @@ thread_tick (void)
     kernel_ticks++;
 
   //every second
-  if(timer_ticks()%TIMER_FREQ == 0)
+  /*if(timer_ticks()%TIMER_FREQ == 0)
   {
     //compute load average
     fu_thread_compute_load_avg();
@@ -168,13 +169,13 @@ thread_tick (void)
     barrier();
     //compute recent cpu
     thread_foreach(fu_thread_compute_recent_cpu, NULL);
-  }
+  }*/
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
   {
     //compute priority based on recent_cpu
-    thread_foreach(fu_thread_compute_priority_advanced, NULL);
+    //thread_foreach(fu_thread_compute_priority_advanced, NULL);
     //recompute priority before sorting
     barrier();
     list_sort(&ready_list, fu_comp_priority, NULL);
@@ -419,6 +420,7 @@ fu_thread_get_priority(struct thread *t)
 {
   //this is either called by the running thread or with interrupts disabled
   //by the scheduler or by a synchronization primitive
+  //can also be called from within a monitor
   ASSERT(t == thread_current() || intr_get_level() == INTR_OFF);
 
   //extract maximum
@@ -644,31 +646,10 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  struct thread *next;
   if (list_empty (&ready_list))
     return idle_thread;
   else
-  {
-    //Old default
-    //return list_entry (list_pop_front (&ready_list), struct thread, elem);
-    if(!thread_mlfqs)
-      next = priority_scheduler();
-    else
-      next = advanced_sheduler();
-    return list_entry (next, struct thread, elem)
-  }
-}
-
-static struct thread *
-priority_scheduler (void) 
-{
-
-}
-
-static struct thread *
-advanced_scheduler (void) 
-{
-
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -769,6 +750,30 @@ fu_comp_priority(const struct list_elem *a,
   ASSERT(a != NULL);
   ASSERT(b != NULL);
 
+  if(aux != NULL)
+  {
+    //this must have been called from within a condition
+    struct semaphore_elem *s_a = list_entry(a, struct semaphore_elem, elem);
+    struct semaphore_elem *s_b = list_entry(b, struct semaphore_elem, elem);
+
+    uint32_t ui32_s_a_size = list_size(&s_a->semaphore.waiters);
+    uint32_t ui32_s_b_size = list_size(&s_b->semaphore.waiters);
+
+    //in case a semaphore does not have any elements
+    if(ui32_s_a_size == 0)
+    {
+      return false;
+    }
+    else if(ui32_s_b_size == 0)
+    {
+      return true;
+    }
+
+    ASSERT(ui32_s_a_size == 1);
+    ASSERT(ui32_s_b_size == 1);
+    a = list_front(&s_a->semaphore.waiters);
+    b = list_front(&s_b->semaphore.waiters);
+  }
   //obtains the threads which are encompassing those elements
   struct thread *t_a = list_entry(a, struct thread, elem);
   struct thread *t_b = list_entry(b, struct thread, elem);
@@ -787,8 +792,7 @@ fu_comp_priority(const struct list_elem *a,
 void
 fu_necessary_to_yield(void)
 {
-  enum intr_level old_level = intr_get_level();
-  intr_disable();
+  enum intr_level old_level = intr_disable();
   if(!list_empty(&ready_list))
   {
     struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
@@ -796,15 +800,18 @@ fu_necessary_to_yield(void)
     if(fu_thread_get_priority(t) > thread_get_priority())
     {
       thread_yield();
+      return;
     }
   }
   intr_set_level(old_level);
   return;
 }
 
-//reinserts a thread which was changed
-void thread_reinsert(struct thread *t)
+//reinserts a thread which was changed into the ready list
+void fu_thread_reinsert_ready_list(struct thread *t)
 {
+  //only called from with interrupts turned off
+  ASSERT(intr_get_level() == INTR_OFF);
   ASSERT(t != NULL);
   ASSERT(t->status == THREAD_READY);
   list_remove(&t->elem);
