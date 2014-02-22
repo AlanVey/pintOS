@@ -425,7 +425,7 @@ fu_thread_get_priority(struct thread *t)
   //this is either called by the running thread or with interrupts disabled
   //by the scheduler or by a synchronization primitive
   //can also be called from within a monitor
-  ASSERT(t == thread_current() || intr_get_level() == INTR_OFF);
+  ASSERT(t != NULL);
 
   //extract maximum
   int i_max_list_priority = -1;
