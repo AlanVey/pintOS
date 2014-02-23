@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+//fixed point opearation imitating floating point operations
+#include "threads/fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -50,29 +52,22 @@ static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
+//const-type variables used by the advanced scheduler
+const uint32_t LOAD_AVERAGE_PAST_WEIGHT = 59;
+const uint32_t LOAD_AVERAGE_COMPLEMETARY_WEIGHT = 1;
+const uint32_t LOAD_AVERAGE_TOTAL_WEIGHT = 60;
+const uint32_t RCPU_ON_LOADAVG = 2;
+const uint32_t PRIORITY_ON_RCPU_DIVISOR = 4;
+const uint32_t PRIORITY_ON_NICE = 2;
+
 #define MAIN_TID 1
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 //load average of the advanced scheduler
-static int32_t load_avg = 0;
+static int64_t load_avg = 0;
 
-//use const keyword instead of macros to facilitate debugging
-const uint32_t NUMBER_OF_FRACTIONAL_BITS = 14;
-const uint32_t MULTIPLICATION = 1<<14;//(1<<NUMBER_OF_FRACTIONAL_BITS);
-const uint32_t ADJUST_SIZE = 100;
-const uint32_t LOAD_AVERAGE_DECAY = 59;
-//left intentionally without brackets so that multiplication be done before
-//division
-//LOAD_AVERAGE_DECAY/(LOAD_AVERAGE_DECAY + 1);
-const uint32_t LOAD_AVERAGE_PAST_WEIGHT = 59;
-//1/(LOAD_AVERAGE_DECAY + 1);
-const uint32_t LOAD_AVERAGE_COMPLEMETARY_WEIGHT = 1;
-const uint32_t LOAD_AVERAGE_TOTAL_WEIGHT = 60;
-const uint32_t RCPU_ON_LOADAVG = 2;
-const uint32_t PRIORITY_ON_RCPU_DIVISOR = 4;
-const uint32_t PRIORITY_ON_NICE = 2;
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -184,7 +179,7 @@ thread_tick (void)
       thread_foreach(fu_thread_compute_priority_advanced, NULL);
     }
 
-    //recompute priority before sorting
+    //recompute priority must come before sorting
     barrier();
     list_sort(&ready_list, fu_comp_priority, NULL);
     //sort the ready list before considering yielding
@@ -460,11 +455,15 @@ fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
   //this function can be called from an interrupt context by the scheduler
   //or when a thread recomputes its nice value
   ASSERT(t == thread_current() || intr_context());
-  //result is rounded down, not rounded to the nearest integer
-  uint32_t priority = PRI_MAX - t->recent_cpu / PRIORITY_ON_RCPU_DIVISOR
-                              - thread_get_nice()* PRIORITY_ON_NICE;
+  //the second term is supposed to be substracted from the first
+  //instead of just dividing this function call does addition and division
+  int priority = fu_share_division(fu_introduce(PRI_MAX -
+                                                thread_get_nice() *
+                                                PRIORITY_ON_NICE),
+                                   -(t->recent_cpu),
+                                   PRIORITY_ON_RCPU_DIVISOR);
+  //changes a thread's priority
   t->priority = priority;
-  fu_necessary_to_yield();
   return;
 }
 
@@ -489,11 +488,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  //added half the constant with which the load_avg is multiplied so that
-  //rounding should be done to the nearest integer
-  uint64_t storage = (uint64_t)load_avg * ADJUST_SIZE + MULTIPLICATION/2;
-  storage /= MULTIPLICATION;
-  return (uint32_t)storage;
+  return fu_adjust(load_avg);
 }
 
 //computes a new load average
@@ -502,16 +497,20 @@ fu_thread_compute_load_avg (void)
 {
   //this function is called from an interrupt context
   ASSERT(intr_context());
+  //counts ready and running threads
+  //excludes the idle thread from the cpu load_avg computation
+  int i_thread_count = list_size(&ready_list);
+  if(thread_current() != idle_thread)
+  {
+    i_thread_count += 1;
+  }
 
-  //use 64 bits to avoid loosing precision
-  uint64_t storage;
-  storage = (uint64_t)thread_get_load_avg() * LOAD_AVERAGE_PAST_WEIGHT;
-  //brings to the same multiplication level
-  storage += MULTIPLICATION * (list_size(&ready_list) + 1)
-                            * LOAD_AVERAGE_COMPLEMETARY_WEIGHT;
-  storage /= LOAD_AVERAGE_TOTAL_WEIGHT;
-  load_avg = storage;
-
+  load_avg = fu_rounding_division(load_avg *
+                                  LOAD_AVERAGE_PAST_WEIGHT +
+                                  fu_introduce(i_thread_count) *
+                                  LOAD_AVERAGE_COMPLEMETARY_WEIGHT,
+                                  LOAD_AVERAGE_TOTAL_WEIGHT,
+                                  false);//divisor not multplied by constant
   return;
 }
 
@@ -519,10 +518,7 @@ fu_thread_compute_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  uint64_t storage = (uint64_t)thread_get_recent_cpu() * ADJUST_SIZE
-                                                       + MULTIPLICATION/2;
-  storage /= MULTIPLICATION;
-  return (uint32_t)storage;
+  return fu_adjust(thread_current()->recent_cpu);
 }
 
 //computes the load average
@@ -534,13 +530,15 @@ fu_thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
 {
   //this function is called from an interrupt context
   ASSERT(intr_context());
-
-  uint64_t storage;
-  storage = (uint64_t)t->recent_cpu * RCPU_ON_LOADAVG * thread_get_load_avg();
-  storage /= (RCPU_ON_LOADAVG*load_avg + 1);
-  //brings to the same multiplication level
-  storage += MULTIPLICATION * thread_current()->nice;
-  t->recent_cpu = storage;
+  //the decay coefficient based on load_avg
+  int64_t i64_load_decay = 
+    fu_rounding_division(load_avg * RCPU_ON_LOADAVG,
+                         load_avg * RCPU_ON_LOADAVG + fu_introduce(1),
+                         true);
+  //computes recent_cpu
+  t->recent_cpu = fu_share_division(fu_introduce(thread_get_nice()),
+                                    t->recent_cpu * i64_load_decay,
+                                    MULTIPLICATION);
 }
 
 
