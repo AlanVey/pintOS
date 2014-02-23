@@ -122,7 +122,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   //initializes list for the initial thread
-  if(thread_mlfqs == true)
+  if(thread_mlfqs)
   {
     initial_thread->nice = 0;
   }
@@ -170,7 +170,7 @@ thread_tick (void)
   }
 
   //every second
-  if(thread_mlfqs == true && timer_ticks()%TIMER_FREQ == 0)
+  if(thread_mlfqs && timer_ticks()%TIMER_FREQ == 0)
   {
     //compute load average
     fu_thread_compute_load_avg();
@@ -186,7 +186,7 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
   {
-    if(thread_mlfqs == true)
+    if(thread_mlfqs)
     {
       //compute priority based on recent_cpu
       thread_foreach(fu_thread_compute_priority_advanced, NULL);
@@ -245,7 +245,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   ASSERT(!intr_context());
   init_thread (t, name, priority);
-  if(thread_mlfqs == true)
+  if(thread_mlfqs)
   {
     ASSERT(!intr_context());
     t->nice = thread_current()->nice;
@@ -441,7 +441,7 @@ fu_thread_get_priority(struct thread *t)
   //can also be called from within a monitor
   ASSERT(t != NULL);
 
-  if(thread_mlfqs == true)
+  if(thread_mlfqs)
   {
     //the list of locks kept by a thread must be empty
     ASSERT(list_empty(&t->l_locks_held));
@@ -479,8 +479,9 @@ fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
                                        PRIORITY_ON_RCPU_DIVISOR);
   //removes the constant
   int priority = fu_extract(storage);
-  //TODO remove printf
-  //printf("%d\n", priority);
+  printf("\n\n\n%d\n\n\n", priority);
+  ASSERT(priority >= 0);
+  ASSERT(priority <= 63);
   ASSERT(m_valid_priority(priority));
   //changes a thread's priority
   t->priority = priority;
