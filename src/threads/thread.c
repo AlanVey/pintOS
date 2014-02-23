@@ -177,11 +177,11 @@ thread_tick (void)
     {
       //compute priority based on recent_cpu
       thread_foreach(fu_thread_compute_priority_advanced, NULL);
+      //recompute priority must come before sorting
+      barrier();
+      list_sort(&ready_list, fu_comp_priority, NULL);
     }
 
-    //recompute priority must come before sorting
-    barrier();
-    list_sort(&ready_list, fu_comp_priority, NULL);
     //sort the ready list before considering yielding
     barrier();
     fu_necessary_to_yield();
@@ -257,14 +257,10 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
-  struct lock l_allow_to_run;
-  lock_init(&l_allow_to_run);
-  lock_acquire(&l_allow_to_run);
   /* Add to run queue. */
   thread_unblock (t);
-  //if a thread with higher priority gets created, it gets scheduled to run
-  //the lock_release function indirectly calls the scheduler
-  lock_release(&l_allow_to_run);
+  //if the new thread has a higher priority than the creator, the creator yields
+  fu_necessary_to_yield();
 
   return tid;
 }
@@ -457,11 +453,14 @@ fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
   ASSERT(t == thread_current() || intr_context());
   //the second term is supposed to be substracted from the first
   //instead of just dividing this function call does addition and division
-  int priority = fu_share_division(fu_introduce(PRI_MAX -
-                                                thread_get_nice() *
-                                                PRIORITY_ON_NICE),
-                                   -(t->recent_cpu),
-                                   PRIORITY_ON_RCPU_DIVISOR);
+  int64_t storage = fu_share_division(fu_introduce(PRI_MAX -
+                                                    t->nice *
+                                                    PRIORITY_ON_NICE),
+                                       -(t->recent_cpu),
+                                       PRIORITY_ON_RCPU_DIVISOR);
+  //removes the constant
+  int priority = fu_extract(storage);
+  ASSERT(m_valid_priority(priority));
   //changes a thread's priority
   t->priority = priority;
   return;

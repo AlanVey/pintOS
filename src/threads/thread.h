@@ -99,6 +99,7 @@ struct thread
     //nice value of a thread
     int32_t nice;
     //how many resources has the thread used recently
+    ////has to be initialized to 0
     int64_t recent_cpu;
 
     /* Shared between thread.c and synch.c. */
