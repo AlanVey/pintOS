@@ -129,8 +129,12 @@ timer_sleep (int64_t ticks)
 {
   ASSERT (intr_get_level () == INTR_ON);
 
+  //TODO remove
+  intr_disable();
+
   //the thread asks to get the lock
-  lock_acquire(&lock_timer_sleep);
+  //TODO
+  //lock_acquire(&lock_timer_sleep);
 
   //creates a container holding a thread and the time this has to wake up
   struct wake_up *p_wu = malloc(sizeof(struct wake_up));
@@ -149,9 +153,11 @@ timer_sleep (int64_t ticks)
   list_insert_ordered(&l_sleeping_threads, &p_wu->le, &fu_compare, NULL);
 
   //releases lock
-  lock_release(&lock_timer_sleep);
+  //TODO
+  //lock_release(&lock_timer_sleep);
 
-  intr_disable();
+  //TODO
+  //intr_disable();
   //I block the current thread
   thread_block();
   intr_enable();
