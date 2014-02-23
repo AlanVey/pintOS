@@ -1,4 +1,4 @@
-#include "devices/timer.h"
+
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -34,7 +34,7 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 //looks in the list of sleeping threads and wakes up the threads
-//which should finish their sleep
+
 static void fu_check_sleeping(void);
 //comparison function for l_sleeping_threads
 static bool fu_compare(const struct list_elem *le_a,
@@ -137,20 +137,20 @@ timer_sleep (int64_t ticks)
   //lock_acquire(&lock_timer_sleep);
 
   //creates a container holding a thread and the time this has to wake up
-  struct wake_up *p_wu = malloc(sizeof(struct wake_up));
+  struct wake_up p_wu;
   //TODO consider moving the element in the thread itself
 
-  p_wu->th = thread_current();
+  p_wu.th = thread_current();
   //the wake up time for the thread is the current time + the time the
   //thread has to sleep
   //TODO what if there  is an interrupt between the calling og this function
   //and the time I access timer_ticks()?
   //if it is during the function call then I have nothing to do
   //adding a field to thread won't change anything
-  p_wu->wake_time = timer_ticks() + ticks;
+  p_wu.wake_time = timer_ticks() + ticks;
 
   //adds a list element to the end of the list
-  list_insert_ordered(&l_sleeping_threads, &p_wu->le, &fu_compare, NULL);
+  list_insert_ordered(&l_sleeping_threads, &p_wu.le, &fu_compare, NULL);
 
   //releases lock
   //TODO
@@ -239,14 +239,14 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
 
-  //TODO wtf does this do?
-  thread_tick ();
-  //TODO not sure if this is the proper order
   //checks if any thread can be waken up
   if(b_initialized_sleeping_list)
   {
     fu_check_sleeping();
   }
+
+  //threads must be woken up before thread_tick is notified
+  thread_tick ();
 }
 /* Returns true if LOOPS iterations waits for more than one timer
    tick, otherwise false. */

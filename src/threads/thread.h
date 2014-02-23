@@ -153,6 +153,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+
 //if a thread is on the ready list and its priority changes
 void fu_thread_reinsert_ready_list(struct thread *t);
 

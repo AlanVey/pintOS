@@ -84,7 +84,9 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-//calculates load_avg every second
+
+//need to ccessed by the timer every second
+//computes load_avg
 static void
 fu_thread_compute_load_avg (void);
 //calculates recent_cpu every second
@@ -120,6 +122,12 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   //initializes list for the initial thread
+  if(thread_mlfqs == true)
+  {
+    initial_thread->nice = 0;
+  }
+  //else
+  //good to initialize it in mlfqs tests as well, just to check that it's empty
   list_init(&initial_thread->l_locks_held);
   initial_thread->tid = allocate_tid ();
 }
@@ -156,7 +164,10 @@ thread_tick (void)
     user_ticks++;
 #endif
   else
+  {
     kernel_ticks++;
+    t->recent_cpu += MULTIPLICATION;
+  }
 
   //every second
   if(thread_mlfqs == true && timer_ticks()%TIMER_FREQ == 0)
@@ -169,6 +180,8 @@ thread_tick (void)
     //compute recent cpu
     thread_foreach(fu_thread_compute_recent_cpu, NULL);
   }
+
+
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -230,7 +243,13 @@ thread_create (const char *name, int priority,
     return TID_ERROR;
 
   /* Initialize thread. */
+  ASSERT(!intr_context());
   init_thread (t, name, priority);
+  if(thread_mlfqs == true)
+  {
+    ASSERT(!intr_context());
+    t->nice = thread_current()->nice;
+  }
   tid = t->tid = allocate_tid ();
   //initializes list for the initial thread
   list_init(&t->l_locks_held);
@@ -460,6 +479,8 @@ fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
                                        PRIORITY_ON_RCPU_DIVISOR);
   //removes the constant
   int priority = fu_extract(storage);
+  //TODO remove printf
+  //printf("%d\n", priority);
   ASSERT(m_valid_priority(priority));
   //changes a thread's priority
   t->priority = priority;
@@ -473,6 +494,8 @@ thread_set_nice (int nice)
   ASSERT(!intr_context());
   thread_current()->nice = nice;
   fu_thread_compute_priority_advanced(thread_current(), NULL);
+  //if it doesn't have the highest priority any longer, it yields
+  fu_necessary_to_yield();
   return;
 }
 
@@ -491,7 +514,7 @@ thread_get_load_avg (void)
 }
 
 //computes a new load average
-static void
+void
 fu_thread_compute_load_avg (void)
 {
   //this function is called from an interrupt context
@@ -524,7 +547,7 @@ thread_get_recent_cpu (void)
 //for a given thread
 //called from interrupt context so there is no need to synchronize with
 //thread_get_average
-static void
+void
 fu_thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
 {
   //this function is called from an interrupt context
@@ -628,7 +651,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->nice = 0;
   t->recent_cpu = 0;
 
   old_level = intr_disable ();
@@ -810,12 +832,15 @@ fu_necessary_to_yield(void)
     //no interrupt should appear here
     if(fu_thread_get_priority(t) > thread_get_priority())
     {
+      //can not ca
       if(intr_context() == true)
       {
         intr_yield_on_return();
       }
       else
       {
+        //have to set interrupts to old level before yielding
+        intr_set_level(old_level);
         thread_yield();
         return;
       }

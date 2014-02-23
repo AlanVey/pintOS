@@ -4,7 +4,9 @@
 #include<stdint.h>
 #include<stdbool.h>
 
-#define m_inside_int32_bounds(x) ( -2147483648 <= x && x <= 2147483647 )
+//the lower bound is bigger by 1 because the expression is evaluated to
+//unsigned int and it would overflow
+#define m_inside_int32_bounds(x) ( -2147483647 <= x && x <= 2147483647 )
 
 //use const keyword instead of macros to facilitate debugging
 static const int32_t NUMBER_OF_FRACTIONAL_BITS = 14;
