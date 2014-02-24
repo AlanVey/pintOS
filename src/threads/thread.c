@@ -85,8 +85,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-//need to ccessed by the timer every second
-//computes load_avg
+//computes load_avg every second
 static void
 fu_thread_compute_load_avg (void);
 //calculates recent_cpu every second

@@ -8,9 +8,9 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Sean Naderi <skd212@imperial.doc.ic.ac.uk>
+Octavian Tuchila <ot612@imperial.doc.ic.ac.uk>
+Alan Vey <amv12@imperial.doc.ic.ac.uk>
 
 ---- PRELIMINARIES ----
 
@@ -73,6 +73,20 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+int32_t nice;
+To keep track of the nice value of a thread to be used in         
+calculations for the priority and recent cpu.
+
+int64_t recent_cpu;
+To keep track of how many resources the thread has used recently. Used in
+calculations for the priority.
+
+static int64_t load_avg;
+To keep track of the load average. This is system wide and not thread
+specific, hence a global variable is used instead of adding a struct
+member.
+
+
 ---- ALGORITHMS ----
 
 >> B2: (5 marks)
@@ -118,4 +132,4 @@ ticks   A   B   C   A   B   C   to run
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point mathematics, that is, an abstract
 >> data type and/or a set of functions or macros to manipulate
->> fixed-point numbers, why did you do so?  If not, why not?S
+>> fixed-point numbers, why did you do so?  If not, why not?
