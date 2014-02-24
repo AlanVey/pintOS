@@ -174,7 +174,7 @@ thread_tick (void)
   {
     //compute load average
     fu_thread_compute_load_avg();
-    //optimization barier - compiler must not change the order of these
+    //optimization barrier - compiler must not change the order of these
     //function calls
     barrier();
     //compute recent cpu
@@ -643,7 +643,7 @@ init_thread (struct thread *t, const char *name, int priority)
   enum intr_level old_level;
 
   ASSERT (t != NULL);
-  ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
+  ASSERT m_valid_priority(priority);
   ASSERT (name != NULL);
 
   memset (t, 0, sizeof *t);
