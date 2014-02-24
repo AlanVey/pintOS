@@ -75,12 +75,9 @@ int64_t fu_share_division(int64_t x, int64_t y, int n)
 static int8_t fu_sign(int64_t x)
 {
   if(x > 0)
-  {
     return 1;
-  }
   else if(x < 0)
-  {
     return -1;
-  }
   return 0;
 }
+

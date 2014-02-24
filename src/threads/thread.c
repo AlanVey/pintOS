@@ -479,13 +479,14 @@ fu_thread_compute_priority_advanced (struct thread *t, void *aux UNUSED)
                                        PRIORITY_ON_RCPU_DIVISOR);
   //removes the constant
   int priority = fu_extract(storage);
-  printf("\n\n\n%d\n\n\n", priority);
-  ASSERT(priority >= 0);
-  ASSERT(priority <= 63);
-  ASSERT(m_valid_priority(priority));
+  
+  if(priority < PRI_MIN)
+    priority = PRI_MIN;
+  else if(priority > PRI_MAX)
+    priority = PRI_MAX;
+
   //changes a thread's priority
   t->priority = priority;
-  return;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -497,7 +498,6 @@ thread_set_nice (int nice)
   fu_thread_compute_priority_advanced(thread_current(), NULL);
   //if it doesn't have the highest priority any longer, it yields
   fu_necessary_to_yield();
-  return;
 }
 
 /* Returns the current thread's nice value. */

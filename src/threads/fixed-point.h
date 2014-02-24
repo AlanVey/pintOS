@@ -1,8 +1,11 @@
 //header which defines arithmetic operations on fixed point variables
 //simulating floating-point arithmetic
 //to avoid overflow, the functions will handle 64-bit signed integers
-#include<stdint.h>
-#include<stdbool.h>
+#ifndef FIXED_POINT_H
+#define FIXED_POINT_H
+
+#include <stdint.h>
+#include <stdbool.h>
 
 //the lower bound is bigger by 1 because the expression is evaluated to
 //unsigned int and it would overflow
@@ -29,3 +32,6 @@ int fu_extract(int64_t x);
 
 //(a + (b/c)) = (a*c + b)/c
 int64_t fu_share_division(int64_t x, int64_t y, int n);
+
+#endif
+
