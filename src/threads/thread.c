@@ -829,22 +829,19 @@ fu_necessary_to_yield(void)
   if(!list_empty(&ready_list))
   {
     struct thread *t = list_entry(list_front(&ready_list), struct thread, elem);
-
-    //no interrupt should appear here
-    if(fu_thread_get_priority(t) > thread_get_priority())
+    if(intr_context() == true)
     {
-      //can not ca
-      if(intr_context() == true)
+      if(fu_thread_get_priority(t) >= thread_get_priority())
       {
         intr_yield_on_return();
       }
-      else
-      {
-        //have to set interrupts to old level before yielding
-        intr_set_level(old_level);
-        thread_yield();
-        return;
-      }
+    }
+    else if(fu_thread_get_priority(t) > thread_get_priority())
+    {
+      //have to set interrupts to old level before yielding
+      intr_set_level(old_level);
+      thread_yield();
+      return;
     }
   }
   intr_set_level(old_level);
