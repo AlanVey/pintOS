@@ -66,7 +66,7 @@ const uint32_t PRIORITY_ON_NICE = 2;
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 //load average of the advanced scheduler
-static int64_t load_avg = 0;
+static int64_t load_avg;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -125,6 +125,7 @@ thread_init (void)
   if(thread_mlfqs)
   {
     initial_thread->nice = 0;
+    load_avg = 0;
   }
   //else
   //good to initialize it in mlfqs tests as well, just to check that it's empty
