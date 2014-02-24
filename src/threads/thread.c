@@ -643,7 +643,7 @@ init_thread (struct thread *t, const char *name, int priority)
   enum intr_level old_level;
 
   ASSERT (t != NULL);
-  ASSERT m_valid_priority(priority);
+  ASSERT (m_valid_priority(priority));
   ASSERT (name != NULL);
 
   memset (t, 0, sizeof *t);
