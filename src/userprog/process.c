@@ -121,6 +121,7 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   int argc = 0, arg_pointers_on_stack = 0;
   /* Used in helping push the pointers for the args to the stack */
   char *stack_ptr_2;
+  char **argv;
 
   /* Push the file name and each arg onto the stack */
   do 
@@ -171,8 +172,15 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
     arg_pointers_on_stack++;
   }
 
-  /* TODO: push argv
-     TODO: push arc
+  /* A pointer to the first arg */
+  argv = (char**)stack_ptr;
+  /* Make space for argv */
+  stack_ptr = ((char**)stack_ptr) - 1);
+  /* The stack pointer here is a pointer to a pointer to a pointer 
+     to the first arg */
+  *((char***)stack_ptr) = argv;
+
+  /* TODO: push arc
      TODO: push null sentinal */
 }
 
