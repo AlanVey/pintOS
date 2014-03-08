@@ -20,28 +20,49 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static int initialise_program_stack (void **esp, char *token, char *saveptr)
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *fn_with_args) 
 {
-  char *fn_copy;
+  /* To store just the file name. 
+     200 is an arbritrary maximum file name size, can be changed later */
+  char fn_extract[200];
+  char *file_name_with_args_copy;
+  char *file_name_with_args_copy_2;
   tid_t tid;
+  /* Used by strtok_r, although is ignored on the first call */
+  char *saveptr;
+  struct thread *t;
 
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
+  /* Make a copy of FILE_NAME_WITH_ARGS.
+     Otherwise there's a race between the caller and load() */
+  fn_with_args_copy = palloc_get_page (0);
+  if (fn_with_args_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_with_args_copy, fn_with_args, PGSIZE);
+
+  /* Make another copy to extract the file name
+     I didnt use the first copy for this because strtok_r 
+     doesn't ensure the supplied string will be unchanged */
+  fn_with_args_copy_2 = palloc_get_page (0);
+  if (fn_with_args_copy_2 == NULL)
+    return TID_ERROR;
+  strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
+
+  /* Extract file name*/
+  fn_extract = strtok_r (file_name_with_args_copy_2, " ", &saveptr);
+  palloc_free_page(file_name_with_args_copy_2);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (fn_extract, PRI_DEFAULT, start_process, fn_with_args_copy);
+
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy_with_args); 
   return tid;
 }
 
@@ -53,6 +74,11 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  /* To store each token from strtok_r */
+  char *token;
+  /* For the strtok_r function to keep track when tokenising */
+  char *save_ptr;
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -61,10 +87,19 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  /* Extract the actual file name from the string */
+  token = strtok_r (file_name, " ", &save_ptr);
+
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success) 
+  {
+    palloc_free_page (file_name);
     thread_exit ();
+  }
+  else 
+  {
+    initialise_program_stack (&if_.esp, token, &save_ptr);
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -74,6 +109,14 @@ start_process (void *file_name_)
      and jump to it. */
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
+}
+/* Called from start_process(). Sets up the program stack as described in the spec 
+   Returns true if sucessful, false if the stack isn't large enough to
+   accomodate for the arguments */
+static int
+initialise_program_stack (void **esp, char *token, char *saveptr)
+{
+TODO:
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
