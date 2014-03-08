@@ -116,7 +116,43 @@ start_process (void *file_name_)
 static int
 initialise_program_stack (void **esp, char *token, char *saveptr)
 {
-TODO:
+  void *stack_ptr = *esp;
+  int argc = 0, arg_pointers_on_stack = 0;
+  /* Used in helping push the pointers for the args to the stack */
+  char *stack_ptr_2;
+
+  /* Push the file name and each arg onto the stack */
+  do 
+  {
+    /* Strlen does not count the null terminator */
+    size_t arg_size = strlen (token) + 1;
+    /* Move the stack pointer down by the size of the argument */
+    stack_ptr = (void*)(((char*)stack_ptr) - arg_size);
+    /* Push the argument onto the stack */
+    strlcpy ((char*)stack_ptr, token, arg_size);
+    argc++;
+
+    //TODO limit max args
+
+    /* Get the next token, NULL is passed as the string as
+       The position to continue from is saved in saveptr */
+    token = strtok_r (NULL, " ", saveptr);
+  }
+  while (token != NULL);
+
+    //TODO
+  /* Round the stack pointer down to a multiple of 4 as word-aligned accesses
+     are faster than unaligned accesses */
+
+  /* Push the addresses of each of the arguments onto the stack */
+  while (arg_pointers_on_stack < argc)
+  {
+
+  }
+
+
+
+  }
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
