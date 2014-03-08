@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static int initialise_program_stack (void **esp, char *token, char *saveptr)
+static bool initialise_program_stack (void **esp, char *token, char *saveptr)
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -85,10 +85,11 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
-
+  
   /* Extract the actual file name from the string */
   token = strtok_r (file_name, " ", &save_ptr);
+  /* Load the ELF executable */
+  success = load (token, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   if (!success) 
@@ -113,7 +114,7 @@ start_process (void *file_name_)
 /* Called from start_process(). Sets up the program stack as described in the spec 
    Returns true if sucessful, false if the stack isn't large enough to
    accomodate for the arguments */
-static int
+static bool
 initialise_program_stack (void **esp, char *token, char *saveptr)
 {
   void *stack_ptr = *esp;
@@ -140,19 +141,39 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   }
   while (token != NULL);
 
+  /* At this point both stack_ptr and stack_ptr_2 are pointing at 
+     the bottom of the stack */
+  stack_ptr_2 = (char*)stack_ptr;
+
     //TODO
   /* Round the stack pointer down to a multiple of 4 as word-aligned accesses
      are faster than unaligned accesses */
 
+  /* Push a null sentinal to the stack */
+  stack_ptr = (((char**)stack_ptr) -1);
+  *((char*)stack_ptr) = 0;
+
   /* Push the addresses of each of the arguments onto the stack */
   while (arg_pointers_on_stack < argc)
   {
-
+    /* Makes sure stack_ptr_2 is pointing to the next argument */
+    while(*(stack_ptr_2 - 1) != '\0')
+    {
+      stack_ptr_2++;
+    }
+    /* Now the stack pointer is pointing to a pointer to a char at the next
+       available place in the stack */
+    stack_ptr = (((char**)stack_ptr) - 1);
+    /* Set the value of this to the next arg which is stored in stack_ptr_2 */
+    *((char**))stack_ptr) = stack_ptr_2;
+    /* Increment variables for next iteration */
+    stack_ptr_2++;
+    arg_pointers_on_stack++;
   }
 
-
-
-  }
+  /* TODO: push argv
+     TODO: push arc
+     TODO: push null sentinal */
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
