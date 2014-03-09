@@ -127,18 +127,13 @@ pagedir_get_page (uint32_t *pd, const void *uaddr)
 {
   uint32_t *pte;
 
-  if(is_user_vaddr (uaddr))
-  {
-    pte = lookup_page (pd, uaddr, false);
-    if (pte != NULL && (*pte & PTE_P) != 0)
-      return pte_get_page (*pte) + pg_ofs (uaddr);
-    else
-      return NULL;
-  }
+  ASSERT (is_user_vaddr (uaddr))
+
+  pte = lookup_page (pd, uaddr, false);
+  if (pte != NULL && (*pte & PTE_P) != 0)
+    return pte_get_page (*pte) + pg_ofs (uaddr);
   else
-  {
-    // Free process resources and kill
-  }
+    return NULL;
 }
 
 /* Marks user virtual page UPAGE "not present" in page
