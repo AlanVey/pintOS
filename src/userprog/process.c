@@ -122,6 +122,7 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   /* Used in helping push the pointers for the args to the stack */
   char *stack_ptr_2;
   char **argv;
+  int *argc_ptr;
 
   /* Push the file name and each arg onto the stack */
   do 
@@ -150,7 +151,8 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   /* Round the stack pointer down to a multiple of 4 as word-aligned accesses
      are faster than unaligned accesses */
 
-  /* Push a null sentinal to the stack */
+  /* Push a null sentinal to the stack - this ensures that argv[argc] is a null
+     pointer as required by the C standard */
   stack_ptr = (((char**)stack_ptr) -1);
   *((char*)stack_ptr) = 0;
 
@@ -180,8 +182,19 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
      to the first arg */
   *((char***)stack_ptr) = argv;
 
-  /* TODO: push arc
-     TODO: push null sentinal */
+  /* Pushes argc to the stack */
+  argc_ptr = (int*)stack_ptr;
+  argc_ptr--;
+  *argc_ptr = argc;
+  stack_ptr = (void*)argc_ptr;
+
+  /* Pushes another null sentinel as the "return address" */
+  stack_ptr = ((void**)stack_ptr - 1);
+  *((void**)stack_ptr) = 0;
+
+  *esp = stack_ptr;
+
+  return true;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
