@@ -143,19 +143,23 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  /* Determine cause. */
+  /* Required by get_user() for identifying invalid user pointers */
+  f->(*eip) = f->eax;
+  f->eax    = 0xffffffff;
+
+  /* Disabled becasue if f is killed it can't be accessed
+     Determine cause.
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* To implement virtual memory, delete the rest of the function
+     To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
-     which fault_addr refers. */
+     which fault_addr refers. 
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-  kill (f);
+  kill (f); */
 }
-
