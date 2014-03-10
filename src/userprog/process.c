@@ -38,8 +38,7 @@ process_execute (const char *fn_with_args)
   /* Used by strtok_r, although is ignored on the first call */
   char *saveptr;
   /* struct thread *t; */
-
-  fn_extract = malloc ()
+  
 
   /* Make a copy of FILE_NAME_WITH_ARGS.
      Otherwise there's a race between the caller and load() */
