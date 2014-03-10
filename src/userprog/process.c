@@ -227,9 +227,7 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
 int
 process_wait (tid_t child_tid) 
 {
-  tid_t args[2] = {child_tid, NULL};
-  thread_foreach(find_thread, args);
-  return (int)args[1];
+  return child_tid;
 }
 
 /* Free the current process's resources. */
@@ -604,29 +602,3 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
-
-/* TODO: Rethink implementation
-   Waits for thread TID to die and returns its exit status.  If
-   it was terminated by the kernel (i.e. killed due to an
-   exception), returns -1.  If TID is invalid or if it was not a
-   child of the calling process, or if process_wait() has already
-   been successfully called for the given TID, returns -1
-   immediately, without waiting. */
-static void find_thread(struct thread *t, tid_t *aux)
-{
-  tid_t tid_child = aux[0];
-  if(t->tid == tid_child)
-  {
-    if(t->status != THREAD_DYING)
-    {
-      enum intr_level old = intr_get_level();
-      intr_disable();
-      thread_block();
-      intr_set_level(old);
-    }
-    else
-      aux[1] = t->exit_value;
-  }
-  aux[1] = -1;
-}
-
