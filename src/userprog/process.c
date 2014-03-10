@@ -34,12 +34,13 @@ process_execute (const char *fn_with_args)
   /* To store just the file name. 
      200 is an arbritrary maximum file name size, can be changed later */
   char fn_extract[200];
-  char *file_name_with_args_copy;
-  char *file_name_with_args_copy_2;
+  char *fn_with_args_copy;
+  char *fn_with_args_copy_2;
   tid_t tid;
   /* Used by strtok_r, although is ignored on the first call */
   char *saveptr;
-  struct thread *t;
+  /* struct thread *t; */
+  
 
   /* Make a copy of FILE_NAME_WITH_ARGS.
      Otherwise there's a race between the caller and load() */
@@ -61,15 +62,15 @@ process_execute (const char *fn_with_args)
   strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
 
   /* Extract file name*/
-  fn_extract = strtok_r (file_name_with_args_copy_2, " ", &saveptr);
-  palloc_free_page(file_name_with_args_copy_2);
+  *fn_extract = *(strtok_r (fn_with_args_copy_2, " ", &saveptr));
+  palloc_free_page(fn_with_args_copy_2);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn_extract, PRI_DEFAULT, start_process, fn_with_args_copy);
 
   if (tid == TID_ERROR)
   {
-    palloc_free_page (fn_copy_with_args); 
+    palloc_free_page (fn_with_args_copy); 
   }
   return tid;
 }
@@ -123,7 +124,7 @@ start_process (void *file_name_)
    Returns true if sucessful, false if the stack isn't large enough to
    accomodate for the arguments */
 static bool
-initialise_program_stack (void **esp, char *token, char *saveptr)
+initialise_program_stack (void **esp, char *token, char **saveptr)
 {
   void *stack_ptr = *esp;
   int argc = 0, arg_pointers_on_stack = 0;
@@ -176,7 +177,7 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
        available place in the stack */
     stack_ptr = (((char**)stack_ptr) - 1);
     /* Set the value of this to the next arg which is stored in stack_ptr_2 */
-    *((char**))stack_ptr) = stack_ptr_2;
+    *((char**)stack_ptr) = stack_ptr_2;
     /* Increment variables for next iteration */
     stack_ptr_2++;
     arg_pointers_on_stack++;
@@ -185,7 +186,7 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   /* A pointer to the first arg */
   argv = (char**)stack_ptr;
   /* Make space for argv */
-  stack_ptr = ((char**)stack_ptr) - 1);
+  stack_ptr = ((char**)stack_ptr - 1);
   /* The stack pointer here is a pointer to a pointer to a pointer 
      to the first arg */
   *((char***)stack_ptr) = argv;

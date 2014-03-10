@@ -31,6 +31,9 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+We didnt add or change any of the above - however a function was added which is called by start_process() which initialises the program stack, called 
+initialise_program_stack().
+
 ---- ALGORITHMS ----
 
 >> A2: (10 marks)
@@ -38,15 +41,37 @@ FirstName LastName <email@domain.example>
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+First of all in the process_execute function some copies of the original file
+name passed in are made. As this string also contains the argments of the program, one of the copies it is tokenised to extract just the file name, which can then be passed to thread_create() as its first argument. The other copy remains unchanged and is passed to the thread_create() function as arguments for start_process() function. 
+
+Once inside the start_process() function the string is tokenised again, first of all to extract the file name which is passed to the load function. The saveptr and token are then passed through to another function to initialise the program stack if the load is sucessful. In this function,
+(initialise_program_stack()), firstly all of the arguments are pushed one by one onto the stack starting with the file name that is passed into the function as an argument. This process is done for each of the argments by getting the length of the string, adding one for the null pointer, moving the stack pointer down the required amount and then copying the argument into the space provided. There is a variable called argc which is incremented each time an argument is pushed to be used later on in the function. Once all of the arguments are pushed another pointer besides the stack pointer is saved at this point also, this is because we need another pointer to go back up the stack to find the addresses of all the arguments while the stack pointer keeps track of the bottom of the stack. After the stack pointer is rounded down to a multiple of four and a null sentinel has been pushed, its time to push the pointers for each of the arguments. We use the second saved pointer to move up through the arguments and everytime a null byte is found we know that directly below it is the start of the next argument. Considering the arguments were originally pushed in the order they were in the string, as we are now traversiing them in reverse order and saving the pointer each time we are ensuring that the pointers to the elements of argv[] are saved from right to left on the stack, as required. We use the argc variable from before to know when all of the pointers to the arguments have been pushed. After this argv is pushed, then argc and finally a null sentinel to finish off. 
+
+We enusre that the stack page doesn't overflow by checking that before we push another argument there is a certain amount of space left between PHYS_BASE and the stack pointer, if there isn't the process will exit.
+
+
 ---- RATIONALE ----
 
 >> A3: (5 marks)
 >> Why does Pintos implement strtok_r() but not strtok()?
 
+strtok() only takes two arguments, unlike strtok_r(). Instead of having a third argument to keep track of the current position in the string from where to tokenise, strtok() uses a global static variable buffer. This variable is subject to race conditions and could be corrupted for other running threads meaning strtok() is not thread save. Therefore in a multi-threaded environment such as Pintos this isn't ideal. 
+
 >> A4: (10 marks)
 >> In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+First of all, having the shell do the seperation means that the shell can be responsible for checking any wrong or unsafe commands before the kernel has to 
+be involved at all. This means that the kernel doesn't have to worry about the integrity of the commands as the shell will do all the checking first, making the kernel less complex.
+
+The shell also supports added featues such as multiple commands and pipelining, which makes it much easier for the user to do operations at a faster pace. Again there would have to be a lot of added functionality to the kernel for it to be support these operations, which seems unnecessary when an application could deal with this before hand such as the shell.
+
+Another advantage to the unix-based system approach is that certain aliases can be defined so that the user can avoid having to type in the full path of the file everytime. The shell can then do the necessary changes such as expanding the name back out before passing it to the kernel which is beneficial to the user.
+
+
+
+
 
                  SYSTEM CALLS
                  ============
