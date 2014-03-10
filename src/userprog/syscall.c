@@ -19,7 +19,7 @@ static void valid_string(const char* str);
 /* Function to verify user address pointers */
 static void valid_args_pointers(uint32_t* esp, uint8_t num_args);
 /* Function to exit process with an error */
-static void exit_with_error();
+static void exit_with_error(uint32_t status);
 
 /* Functions for individual system calls */
 static void halt     (void);
@@ -60,19 +60,19 @@ syscall_handler (struct intr_frame *f)
   /* SYSTEM CALLS Implementation */
   switch(*esp)
   {
-    case SYS_HALT     : halt     ();                          break;
-    case SYS_EXIT     : exit     (esp + 1);                   break;
-    case SYS_EXEC     : exec     (esp + 1);                   break;
-    case SYS_WAIT     : wait     (esp + 1);                   break;                           
-    case SYS_CREATE   : create   (esp + 1, esp + 2);          break;
-    case SYS_REMOVE   : remove   (esp + 1);                   break;
-    case SYS_OPEN     : open     (esp + 1);                   break;
-    case SYS_CLOSE    : close    (esp + 1);                   break;
-    case SYS_FILESIZE : filesize (esp + 1);                   break;
-    case SYS_READ     : read     (esp + 1, esp + 2, esp + 3); break;
-    case SYS_WRITE    : write    (esp + 1, esp + 2, esp + 3); break;
-    case SYS_SEEK     : seek     (esp + 1, esp + 2);          break;
-    case SYS_TELL     : tell     (esp + 1);                   break;
+    case SYS_HALT     : halt     ();                            break;
+    case SYS_EXIT     : exit     (*(esp + 1);                   break;
+    case SYS_EXEC     : exec     (NULL);                        break;
+    case SYS_WAIT     : wait     (*(esp + 1);                   break;                           
+    case SYS_CREATE   : create   (NULL, *(esp + 2);             break;
+    case SYS_REMOVE   : remove   (NULL);                        break;
+    case SYS_OPEN     : open     (NULL;                         break;
+    case SYS_CLOSE    : close    (*(esp + 1);                   break;
+    case SYS_FILESIZE : filesize (*(esp + 1);                   break;
+    case SYS_READ     : read     (*(esp + 1), NULL, *(esp + 3); break;
+    case SYS_WRITE    : write    (*(esp + 1), NULL, *(esp + 3); break;
+    case SYS_SEEK     : seek     (*(esp + 1), *(esp + 2);       break;
+    case SYS_TELL     : tell     (*(esp + 1);                   break;
     default           : exit_with_error(NULL);
   }
 }
