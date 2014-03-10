@@ -21,6 +21,21 @@ static void valid_args_pointers(uint32_t* esp, uint8_t num_args);
 /* Function to exit process with an error */
 static void exit_with_error();
 
+/* Functions for individual system calls */
+static void halt     (void);
+static void exit     (int status) NO_RETURN;
+static pid_t exec    (const char *file);
+static int wait      (pid_t pid);
+static bool create   (const char *file, unsigned initial_size);
+static bool remove   (const char *file);
+static int open      (const char *file);
+static void close    (int fd);
+static int filesize  (int fd);
+static int read      (int fd, void *buffer, unsigned length);
+static int write     (int fd, const void *buffer, unsigned length);
+static void seek     (int fd, unsigned position);
+static unsigned tell (int fd);
+
 // lock for the file system
 static struct lock lo_file_system;
 
@@ -38,86 +53,98 @@ syscall_handler (struct intr_frame *f)
   /* Checks the user address pointer is valid */
   uint32_t *esp = f->esp;
   if(esp >= PHYS_BASE || get_user(esp) == -1)
-    exit_with_error();
+    exit_with_error(NULL);
 
   /* SYSTEM CALLS Implementation */
-  if(*esp == SYS_HALT)
+  switch(*esp)
   {
-    shutdown();
-    NOT_REACHED();
+    case SYS_HALT     : halt     ();                                   break;
+    case SYS_EXIT     : exit     (*(esp + 1));                         break;
+    case SYS_EXEC     : exec     (*(esp + 1));                         break;
+    case SYS_WAIT     : wait     (*(esp + 1));                         break;                           
+    case SYS_CREATE   : create   (*(esp + 1), *(esp + 2));             break;
+    case SYS_REMOVE   : remove   (*(esp + 1));                         break;
+    case SYS_OPEN     : open     (*(esp + 1));                         break;
+    case SYS_CLOSE    : close    (*(esp + 1));                         break;
+    case SYS_FILESIZE : filesize (*(esp + 1));                         break;
+    case SYS_READ     : read     (*(esp + 1), *(esp + 2), *(esp + 3)); break;
+    case SYS_WRITE    : write    (*(esp + 1), *(esp + 2), *(esp + 3)); break;
+    case SYS_SEEK     : seek     (*(esp + 1), *(esp + 2));             break;
+    case SYS_TELL     : tell     (*(esp + 1));                         break;
+    default           : exit_with_error(NULL);
   }
-  else if(*esp == SYS_EXIT)
-  {
-    valid_args_pointers(esp, 1);
-    thread_current()->exit_status = *(esp + 1);
-    thread_exit();
-    NOT_REACHED();
-  }
-  else if(*esp == SYS_EXEC)
-  {
-    valid_args_pointers(esp, 1);
-    char* cmd_line = *(esp + 1);
-    valid_string(cmd_line);
-    f->eax = process_execute(cmd_line);
-  }
-  else if(*esp == SYS_WAIT)
-  {
-    valid_args_pointers(sp, 1);
-    f->eax = process_wait(*(esp + 1));
-  }                           
-  else if(*esp == SYS_CREATE)
-  {
-    valid_args_pointers(sp, 2);
-    char *file = *(esp + 1);
-    unsigned size = *(esp + 2);
-
-    valid_string(file);
-    lock_aquire(&lo_file_system);
-    f->eax = filesys_create(file, size);
-    lock_release(&lo_file_system);
-  }
-  else if(*esp == SYS_REMOVE)
-  {
-    valid_args_pointers(sp, 1);
-    char *file = *(esp + 1);
-
-    valid_string(file);
-    lock_aquire(&lo_file_system);
-    f->eax = filesys_remove(file);
-    lock_release(&lo_file_system);
-  }
-  else if(*esp == SYS_OPEN)
-  {
-    valid_args_pointers(sp, 1);
-  }
-  else if(*esp == SYS_CLOSE)
-  {
-    valid_args_pointers(sp, 1);
-  }
-  else if(*esp == SYS_FILESIZE)
-  {
-    valid_args_pointers(sp, 1);
-  }
-  else if(*esp == SYS_READ)
-  {
-    valid_args_pointers(sp, 3);
-  }
-  else if(*esp == SYS_WRITE)
-  {
-    valid_args_pointers(sp, 3);
-  }
-  else if(*esp == SYS_SEEK)
-  {
-    valid_args_pointers(sp, 2);
-  }
-  else if(*esp == SYS_TELL)
-  {
-    valid_args_pointers(sp, 1);
-  }
-  else
-    exit_with_error();
 }
 
+//==========================================================================//
+//==========================================================================//
+// System Call Functions
+//==========================================================================//
+//==========================================================================//
+static void halt(void)
+{
+  shutdown();
+  NOT_REACHED();
+}
+static void exit(int status) NO_RETURN
+{
+  valid_args_pointers(esp, 1);
+  exit_with_error(status);
+}
+static pid_t exec(const char *cmd_line)
+{
+  valid_args_pointers(esp, 1);
+  valid_string(cmd_line);
+  f->eax = process_execute(cmd_line);
+}
+static int wait(pid_t pid)
+{
+  valid_args_pointers(esp, 1);
+  f->eax = process_wait(pid);
+}
+static bool create(const char *file, unsigned initial_size)
+{
+  valid_args_pointers(sp, 2);
+  valid_string(file);
+  lock_aquire(&lo_file_system);
+  f->eax = filesys_create(file, initial_size);
+  lock_release(&lo_file_system);
+}
+static bool remove(const char *file)
+{
+  valid_args_pointers(esp, 1);
+  valid_string(file);
+  lock_aquire(&lo_file_system);
+  f->eax = filesys_remove(file);
+  lock_release(&lo_file_system);
+}
+static int open(const char *file)
+{
+  valid_args_pointers(esp, 1);
+}
+static void close(int fd)
+{
+  valid_args_pointers(esp, 1);
+}
+static int filesize(int fd)
+{
+  valid_args_pointers(esp, 1);
+}
+static int read(int fd, void *buffer, unsigned length)
+{
+  valid_args_pointers(sp, 3);
+}
+static int write(int fd, const void *buffer, unsigned length)
+{
+  alid_args_pointers(sp, 3);
+}
+static void seek(int fd, unsigned position)
+{
+  valid_args_pointers(sp, 2);
+}
+static unsigned tell(int fd)
+{
+  valid_args_pointers(esp, 1);
+}
 
 //==========================================================================//
 //==========================================================================//
@@ -126,8 +153,7 @@ syscall_handler (struct intr_frame *f)
 //==========================================================================//
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
-   Returns the byte value if successful, -1 if a segfault
-   occurred. */
+   Returns the byte value if successful, -1 if a segfault occurred. */
 static int get_user (const uint8_t *uaddr)
 {
   int result;
@@ -151,7 +177,7 @@ static void valid_string(char* str)
   for(int i = 0; c = get_user(esp + i) != '\0'; i++)
   {
     if(c == -1)
-      exit_with_error();
+      exit_with_error(NULL);
   }
 }
 /* Assures user address pointer + offset is in user space.
@@ -159,12 +185,13 @@ static void valid_string(char* str)
 static void valid_args_pointers(uint32_t* esp, int8_t num_arg)
 {
   if(esp + num_arg >= PHYS_BASE)
-    exit_with_error();
+    exit_with_error(NULL);
 }
 
 /* Terminates the process with exit code -1 */
-static void exit_with_error()
+static void exit_with_error(int32_t status)
 {
-  thread_current()->exit_status = -1;
+  thread_current()->exit_value = status ? status : -1;
   thread_exit();
+  NOT_REACHED();
 }

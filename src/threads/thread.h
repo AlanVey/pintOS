@@ -102,15 +102,14 @@ struct thread
     ////has to be initialized to 0
     int64_t recent_cpu;
 
-    // Used by System Calls for exiting
-    int32_t exit_status;
-
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    /* Used by System Calls for exiting */
+    int32_t exit_value;
 #endif
 
     /* Owned by thread.c. */
