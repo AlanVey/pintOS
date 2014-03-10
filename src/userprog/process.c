@@ -18,9 +18,12 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
+#define LAST_TWO_BITS_ZERO 0xfffffffc
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool initialise_program_stack (void **esp, char *token, char **saveptr);
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -38,7 +41,7 @@ process_execute (const char *fn_with_args)
   /* Used by strtok_r, although is ignored on the first call */
   char *saveptr;
   /* struct thread *t; */
-  
+
 
   /* Make a copy of FILE_NAME_WITH_ARGS.
      Otherwise there's a race between the caller and load() */
@@ -154,9 +157,10 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
      the bottom of the stack (As the stack is growing downwards) */
   stack_ptr_2 = (char*)stack_ptr;
 
-    //TODO
-  /* Round the stack pointer down to a multiple of 4 as word-aligned accesses
-     are faster than unaligned accesses */
+  /* Rounds the stack pointer down to a multiple of 4 by doing a bitwise 
+     AND of the stack pointer and a number with the last two bits, equating to
+     the number 4, set as zero */
+  stack_ptr = ((void*)stack_ptr & LAST_TWO_BITS_ZERO);
 
   /* Push a null sentinal to the stack - this ensures that argv[argc] is a null
      pointer as required by the C standard */
