@@ -194,9 +194,12 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while(true);
+  while(child_tid == child_tid)
+  {
+    break;
+  }
   return -1;
 }
 
