@@ -11,7 +11,7 @@
 static void syscall_handler (struct intr_frame *);
 
 /* Function for reading data at specified *uaddr */
-static int get_user (const uint8_t *uaddr);
+static int get_user (const uint32_t *uaddr);
 /* Function for writing data (byte) at specified address (*uaddr) */
 static bool put_user (uint8_t *udst, uint8_t byte);
 /* Function for String verification */
@@ -24,8 +24,8 @@ static void exit_with_error();
 /* Functions for individual system calls */
 static void halt     (void);
 static void exit     (int status) NO_RETURN;
-static pid_t exec    (const char *file);
-static int wait      (pid_t tid);
+static tid_t exec    (const char *file);
+static int wait      (tid_t tid);
 static bool create   (const char *file, unsigned initial_size);
 static bool remove   (const char *file);
 static int open      (const char *file);
@@ -60,19 +60,19 @@ syscall_handler (struct intr_frame *f)
   /* SYSTEM CALLS Implementation */
   switch(*esp)
   {
-    case SYS_HALT     : halt     ();                                   break;
-    case SYS_EXIT     : exit     (*(esp + 1));                         break;
-    case SYS_EXEC     : exec     (*(esp + 1));                         break;
-    case SYS_WAIT     : wait     (*(esp + 1));                         break;                           
-    case SYS_CREATE   : create   (*(esp + 1), *(esp + 2));             break;
-    case SYS_REMOVE   : remove   (*(esp + 1));                         break;
-    case SYS_OPEN     : open     (*(esp + 1));                         break;
-    case SYS_CLOSE    : close    (*(esp + 1));                         break;
-    case SYS_FILESIZE : filesize (*(esp + 1));                         break;
-    case SYS_READ     : read     (*(esp + 1), *(esp + 2), *(esp + 3)); break;
-    case SYS_WRITE    : write    (*(esp + 1), *(esp + 2), *(esp + 3)); break;
-    case SYS_SEEK     : seek     (*(esp + 1), *(esp + 2));             break;
-    case SYS_TELL     : tell     (*(esp + 1));                         break;
+    case SYS_HALT     : halt     ();                          break;
+    case SYS_EXIT     : exit     (esp + 1);                   break;
+    case SYS_EXEC     : exec     (esp + 1);                   break;
+    case SYS_WAIT     : wait     (esp + 1);                   break;                           
+    case SYS_CREATE   : create   (esp + 1, esp + 2);          break;
+    case SYS_REMOVE   : remove   (esp + 1);                   break;
+    case SYS_OPEN     : open     (esp + 1);                   break;
+    case SYS_CLOSE    : close    (esp + 1);                   break;
+    case SYS_FILESIZE : filesize (esp + 1);                   break;
+    case SYS_READ     : read     (esp + 1, esp + 2, esp + 3); break;
+    case SYS_WRITE    : write    (esp + 1, esp + 2, esp + 3); break;
+    case SYS_SEEK     : seek     (esp + 1, esp + 2);          break;
+    case SYS_TELL     : tell     (esp + 1);                   break;
     default           : exit_with_error(NULL);
   }
 }
@@ -95,11 +95,11 @@ static void exit(int status) NO_RETURN
 static tid_t exec(const char *cmd_line)
 {
   valid_args_pointers(esp, 1);
-  valid_string(cmd_line);
+  valid_string(*cmd_line);
   f->eax = process_execute(cmd_line);
   return 0;
 }
-static int wait(pid_t pid)
+static int wait(tid_t pid)
 {
   valid_args_pointers(esp, 1);
   f->eax = process_wait(pid);
@@ -108,7 +108,7 @@ static int wait(pid_t pid)
 static bool create(const char *file, unsigned initial_size)
 {
   valid_args_pointers(esp, 2);
-  valid_string(file);
+  valid_string(*file);
   lock_aquire(&lo_file_system);
   f->eax = filesys_create(file, initial_size);
   lock_release(&lo_file_system);
@@ -117,7 +117,7 @@ static bool create(const char *file, unsigned initial_size)
 static bool remove(const char *file)
 {
   valid_args_pointers(esp, 1);
-  valid_string(file);
+  valid_string(*file);
   lock_aquire(&lo_file_system);
   f->eax = filesys_remove(file);
   lock_release(&lo_file_system);
