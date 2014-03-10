@@ -95,19 +95,22 @@ static pid_t exec(const char *cmd_line)
   valid_args_pointers(esp, 1);
   valid_string(cmd_line);
   f->eax = process_execute(cmd_line);
+  return 0;
 }
 static int wait(pid_t pid)
 {
   valid_args_pointers(esp, 1);
   f->eax = process_wait(pid);
+  return 0;
 }
 static bool create(const char *file, unsigned initial_size)
 {
-  valid_args_pointers(sp, 2);
+  valid_args_pointers(esp, 2);
   valid_string(file);
   lock_aquire(&lo_file_system);
   f->eax = filesys_create(file, initial_size);
   lock_release(&lo_file_system);
+  return false;
 }
 static bool remove(const char *file)
 {
@@ -116,10 +119,12 @@ static bool remove(const char *file)
   lock_aquire(&lo_file_system);
   f->eax = filesys_remove(file);
   lock_release(&lo_file_system);
+  return false;
 }
 static int open(const char *file)
 {
   valid_args_pointers(esp, 1);
+  return 0;
 }
 static void close(int fd)
 {
@@ -128,22 +133,26 @@ static void close(int fd)
 static int filesize(int fd)
 {
   valid_args_pointers(esp, 1);
+  return 0;
 }
 static int read(int fd, void *buffer, unsigned length)
 {
-  valid_args_pointers(sp, 3);
+  valid_args_pointers(esp, 3);
+  return 0;
 }
 static int write(int fd, const void *buffer, unsigned length)
 {
-  alid_args_pointers(sp, 3);
+  alid_args_pointers(esp, 3);
+  return 0;
 }
 static void seek(int fd, unsigned position)
 {
-  valid_args_pointers(sp, 2);
+  valid_args_pointers(esp, 2);
 }
 static unsigned tell(int fd)
 {
   valid_args_pointers(esp, 1);
+  return 0;
 }
 
 //==========================================================================//
@@ -171,7 +180,7 @@ static bool put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 /* Checks a Sting and assures it is \0 terminated and no error value */
-static void valid_string(char* str)
+static void valid_string(const char* str)
 {
   char c;
   for(int i = 0; c = get_user(esp + i) != '\0'; i++)
