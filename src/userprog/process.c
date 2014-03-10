@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static bool initialise_program_stack (void **esp, char *token, char *saveptr);
+static bool initialise_program_stack (void **esp, char *token, char **saveptr);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -59,8 +59,8 @@ process_execute (const char *fn_with_args)
   strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
 
   /* Extract file name*/
-  *fn_extract = strtok_r (file_name_with_args_copy_2, " ", &saveptr);
-  palloc_free_page(file_name_with_args_copy_2);
+  *fn_extract = strtok_r (fn_with_args_copy_2, " ", &saveptr);
+  palloc_free_page(fn_with_args_copy_2);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn_extract, PRI_DEFAULT, start_process, fn_with_args_copy);
@@ -183,7 +183,7 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
   /* A pointer to the first arg */
   argv = (char**)stack_ptr;
   /* Make space for argv */
-  stack_ptr = ((char**)stack_ptr) - 1);
+  stack_ptr = ((char**)stack_ptr - 1);
   /* The stack pointer here is a pointer to a pointer to a pointer 
      to the first arg */
   *((char***)stack_ptr) = argv;
