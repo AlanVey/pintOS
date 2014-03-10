@@ -20,7 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static bool initialise_program_stack (void **esp, char *token, char *saveptr)
+static bool initialise_program_stack (void **esp, char *token, char *saveptr);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -43,7 +43,9 @@ process_execute (const char *fn_with_args)
      Otherwise there's a race between the caller and load() */
   fn_with_args_copy = palloc_get_page (0);
   if (fn_with_args_copy == NULL)
+  {
     return TID_ERROR;
+  }
   strlcpy (fn_with_args_copy, fn_with_args, PGSIZE);
 
   /* Make another copy to extract the file name
@@ -51,7 +53,9 @@ process_execute (const char *fn_with_args)
      doesn't ensure the supplied string will be unchanged */
   fn_with_args_copy_2 = palloc_get_page (0);
   if (fn_with_args_copy_2 == NULL)
+  {
     return TID_ERROR;
+  }
   strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
 
   /* Extract file name*/
@@ -62,7 +66,9 @@ process_execute (const char *fn_with_args)
   tid = thread_create (fn_extract, PRI_DEFAULT, start_process, fn_with_args_copy);
 
   if (tid == TID_ERROR)
+  {
     palloc_free_page (fn_copy_with_args); 
+  }
   return tid;
 }
 
@@ -122,6 +128,7 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   /* Used in helping push the pointers for the args to the stack */
   char *stack_ptr_2;
   char **argv;
+  int *argc_ptr;
 
   /* Push the file name and each arg onto the stack */
   do 
@@ -143,14 +150,15 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
   while (token != NULL);
 
   /* At this point both stack_ptr and stack_ptr_2 are pointing at 
-     the bottom of the stack */
+     the bottom of the stack (As the stack is growing downwards) */
   stack_ptr_2 = (char*)stack_ptr;
 
     //TODO
   /* Round the stack pointer down to a multiple of 4 as word-aligned accesses
      are faster than unaligned accesses */
 
-  /* Push a null sentinal to the stack */
+  /* Push a null sentinal to the stack - this ensures that argv[argc] is a null
+     pointer as required by the C standard */
   stack_ptr = (((char**)stack_ptr) -1);
   *((char*)stack_ptr) = 0;
 
@@ -180,8 +188,19 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
      to the first arg */
   *((char***)stack_ptr) = argv;
 
-  /* TODO: push arc
-     TODO: push null sentinal */
+  /* Pushes argc to the stack */
+  argc_ptr = (int*)stack_ptr;
+  argc_ptr--;
+  *argc_ptr = argc;
+  stack_ptr = (void*)argc_ptr;
+
+  /* Pushes another null sentinel as the "return address" */
+  stack_ptr = ((void**)stack_ptr - 1);
+  *((void**)stack_ptr) = 0;
+
+  *esp = stack_ptr;
+
+  return true;
 }
 
 /* Waits for thread TID to die and returns its exit status.  If
