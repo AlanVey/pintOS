@@ -39,6 +39,8 @@ process_execute (const char *fn_with_args)
   char *saveptr;
   /* struct thread *t; */
 
+  fn_extract = malloc ()
+
   /* Make a copy of FILE_NAME_WITH_ARGS.
      Otherwise there's a race between the caller and load() */
   fn_with_args_copy = palloc_get_page (0);
@@ -59,7 +61,7 @@ process_execute (const char *fn_with_args)
   strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
 
   /* Extract file name*/
-  *fn_extract = strtok_r (fn_with_args_copy_2, " ", &saveptr);
+  *fn_extract = *(strtok_r (fn_with_args_copy_2, " ", &saveptr));
   palloc_free_page(fn_with_args_copy_2);
 
   /* Create a new thread to execute FILE_NAME. */
