@@ -15,7 +15,7 @@ static int get_user (const uint8_t *uaddr);
 /* Function for writing data (byte) at specified address (*uaddr) */
 static bool put_user (uint8_t *udst, uint8_t byte);
 /* Function for String verification */
-static void valid_string(char* str);
+static void valid_string(const char* str);
 /* Function to verify user address pointers */
 static void valid_args_pointers(uint32_t* esp, uint8_t num_args);
 /* Function to exit process with an error */
@@ -25,7 +25,7 @@ static void exit_with_error();
 static void halt     (void);
 static void exit     (int status) NO_RETURN;
 static pid_t exec    (const char *file);
-static int wait      (pid_t pid);
+static int wait      (pid_t tid);
 static bool create   (const char *file, unsigned initial_size);
 static bool remove   (const char *file);
 static int open      (const char *file);
@@ -38,6 +38,8 @@ static unsigned tell (int fd);
 
 // lock for the file system
 static struct lock lo_file_system;
+// global acces to esp to make function declarations easier
+static uint32_t *esp;
 
 void
 syscall_init (void) 
@@ -51,7 +53,7 @@ static void
 syscall_handler (struct intr_frame *f) 
 {
   /* Checks the user address pointer is valid */
-  uint32_t *esp = f->esp;
+  esp = f->esp;
   if(esp >= PHYS_BASE || get_user(esp) == -1)
     exit_with_error(NULL);
 
@@ -90,7 +92,7 @@ static void exit(int status) NO_RETURN
   valid_args_pointers(esp, 1);
   exit_with_error(status);
 }
-static pid_t exec(const char *cmd_line)
+static tid_t exec(const char *cmd_line)
 {
   valid_args_pointers(esp, 1);
   valid_string(cmd_line);
