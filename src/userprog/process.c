@@ -70,7 +70,7 @@ process_execute (const char *fn_with_args)
 
   /* Reserve space to store the file name */
   fn_extract = malloc (MAX_FILE_NAME_BYTES);
-  if (fn_extract = NULL) 
+  if (fn_extract == NULL) 
   {
     palloc_free_page (fn_with_args_copy);
     palloc_free_page (fn_with_args_copy_2);
