@@ -600,26 +600,26 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-/* Waits for thread TID to die and returns its exit status.  If
+/* TODO: Rethink implementation
+   Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
    immediately, without waiting. */
-static void find_thread(struct thread *t, void *aux)
+static void find_thread(struct thread *t, tid_t *aux)
 {
-  tid_t pid = aux[0];
-  if(t->tid == pid)
+  tid_t tid_child = aux[0];
+  if(t->tid == tid_child)
   {
     if(t->status != THREAD_DYING)
     {
-      t->wake_on_exit = t;
-      intr_level old = intr_get_level();
+      enum intr_level old = intr_get_level();
       intr_disable();
       thread_block();
       intr_set_level(old);
     }
-    if(t->process_exited)
+    else
       aux[1] = t->exit_value;
   }
   aux[1] = -1;
