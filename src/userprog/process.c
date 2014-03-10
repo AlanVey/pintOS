@@ -162,7 +162,7 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
   /* Rounds the stack pointer down to a multiple of 4 by doing a bitwise 
      AND of the stack pointer and a number with the last two bits, equating to
      the number 4, set as zero */
-  stack_ptr = ((void*)stack_ptr & LAST_TWO_BITS_ZERO);
+  stack_ptr = (void*)(((intptr_t)stack_ptr) & LAST_TWO_BITS_ZERO);
 
   /* Push a null sentinal to the stack - this ensures that argv[argc] is a null
      pointer as required by the C standard */
