@@ -22,7 +22,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-static bool initialise_program_stack (void **esp, char *token, char *saveptr);
+static bool initialise_program_stack (void **esp, char *token, char **saveptr);
 /* Function indirectly used as part of SYS_WAIT implementation */
 static void find_thread(struct thread *t, void *aux);
 
