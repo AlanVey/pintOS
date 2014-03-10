@@ -19,6 +19,8 @@
 #include "threads/vaddr.h"
 
 #define LAST_TWO_BITS_ZERO 0xfffffffc
+/* Size of a page */
+#define MAX_BYTES_FOR_ARGS 4096
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -143,11 +145,14 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
     size_t arg_size = strlen (token) + 1;
     /* Move the stack pointer down by the size of the argument */
     stack_ptr = (void*)(((char*)stack_ptr) - arg_size);
+    /* Check to make sure there is no overflow */
+    if(PHYS_BASE - stack_ptr > MAX_BYTES_FOR_ARGS)
+    {
+      return false;
+    }
     /* Push the argument onto the stack */
     strlcpy ((char*)stack_ptr, token, arg_size);
     argc++;
-
-    //TODO limit max args
 
     /* Get the next token, NULL is passed as the string as
        The position to continue from is saved in saveptr */
