@@ -25,15 +25,15 @@ static void exit_with_error(uint32_t status);
 /* Functions for individual system calls */
 static void halt     (void);
 static void exit     (int status) NO_RETURN;
-static tid_t exec    (const char *file);
+static tid_t exec    (char *file);
 static int wait      (tid_t tid);
-static bool create   (const char *file, unsigned initial_size);
-static bool remove   (const char *file);
-static int open      (const char *file);
+static bool create   (char *file, unsigned initial_size);
+static bool remove   (char *file);
+static int open      (char *file);
 static void close    (int fd);
 static int filesize  (int fd);
 static int read      (int fd, void *buffer, unsigned length);
-static int write     (int fd, const void *buffer, unsigned length);
+static int write     (int fd, void *buffer, unsigned length);
 static void seek     (int fd, unsigned position);
 static unsigned tell (int fd);
 
@@ -88,7 +88,7 @@ static void halt(void)
   shutdown();
   NOT_REACHED();
 }
-static void exit(int32_t status) NO_RETURN
+static void exit(int32_t status)
 {
   valid_args_pointers(esp, 1);
   exit_with_error(status);
