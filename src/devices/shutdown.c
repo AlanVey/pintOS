@@ -18,7 +18,7 @@
 #define CONTROL_REG 0x64
 
 /* How to shut down when shutdown() is called. */
-static enum shutdown_type how = SHUTDOWN_NONE;
+static enum shutdown_type how = SHUTDOWN_POWER_OFF;
 
 static void print_stats (void);
 
