@@ -21,6 +21,8 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool initialise_program_stack (void **esp, char *token, char *saveptr);
+/* Function indirectly used as part of SYS_WAIT implementation */
+static void find_thread(struct thread *t, void *aux);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -215,11 +217,9 @@ initialise_program_stack (void **esp, char *token, char *saveptr)
 int
 process_wait (tid_t child_tid) 
 {
-  while(child_tid == child_tid)
-  {
-    break;
-  }
-  return -1;
+  tid_t args[2] = {child_tid, NULL};
+  thread_foreach(find_thread, args);
+  return (int)args[1];
 }
 
 /* Free the current process's resources. */
@@ -594,3 +594,29 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
+/* Waits for thread TID to die and returns its exit status.  If
+   it was terminated by the kernel (i.e. killed due to an
+   exception), returns -1.  If TID is invalid or if it was not a
+   child of the calling process, or if process_wait() has already
+   been successfully called for the given TID, returns -1
+   immediately, without waiting. */
+static void find_thread(struct thread *t, void *aux)
+{
+  tid_t pid = aux[0];
+  if(t->tid == pid)
+  {
+    if(t->status != THREAD_DYING)
+    {
+      t->wake_on_exit = t;
+      intr_level old = intr_get_level();
+      intr_disable();
+      thread_block();
+      intr_set_level(old);
+    }
+    if(t->process_exited)
+      aux[1] = t->exit_value;
+  }
+  aux[1] = -1;
+}
+
