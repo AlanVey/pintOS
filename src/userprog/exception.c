@@ -146,7 +146,7 @@ page_fault (struct intr_frame *f)
   page_fault_cnt++;
 
   /* Required by get_user() for identifying invalid user pointers */
-  uint32_t *eip = f->eip();
+  uint32_t *eip = f->eip;
   *eip = f->eax;
   f->eax = 0xffffffff;
 
