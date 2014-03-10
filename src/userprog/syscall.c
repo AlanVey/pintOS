@@ -39,7 +39,7 @@ static unsigned tell (int fd);
 
 // lock for the file system
 static struct lock lo_file_system;
-// global acces to esp to make function declarations easier
+// global access to stack pointer to make function declarations easier
 static uint32_t *esp;
 
 void
@@ -61,20 +61,20 @@ syscall_handler (struct intr_frame *f)
   /* SYSTEM CALLS Implementation */
   switch(*esp)
   {
-    case SYS_HALT     :          halt();                              break;
-    case SYS_EXIT     :          exit(*(esp + 1));                    break;
-    case SYS_EXEC     : f->eax = exec(*(esp + 1));                    break;
-    case SYS_WAIT     : f->eax = wait(*(esp + 1));                    break;                           
-    case SYS_CREATE   : f->eax = create(NULL, *(esp + 2));            break;
-    case SYS_REMOVE   : f->eax = remove(NULL);                        break;
-    case SYS_OPEN     : f->eax = open(NULL);                          break;
-    case SYS_CLOSE    :          close(*(esp + 1));                   break;
-    case SYS_FILESIZE : f->eax = filesize(*(esp + 1));                break;
-    case SYS_READ     : f->eax = read(*(esp + 1), NULL, *(esp + 3));  break;
-    case SYS_WRITE    : f->eax = write(*(esp + 1), NULL, *(esp + 3)); break;
-    case SYS_SEEK     :          seek(*(esp + 1), *(esp + 2));        break;
-    case SYS_TELL     : f->eax = tell(*(esp + 1));                    break;
-    default           : exit_with_error(NULL);
+    case SYS_HALT     :          halt(); break;
+    case SYS_EXIT     :          exit((int32_t)*(esp + 1)); break;
+    case SYS_EXEC     : f->eax = exec(NULL); break;
+    case SYS_WAIT     : f->eax = wait((tid_t)*(esp + 1)); break;                           
+    case SYS_CREATE   : f->eax = create(NULL, 0); break;
+    case SYS_REMOVE   : f->eax = remove(NULL); break;
+    case SYS_OPEN     : f->eax = open(NULL); break;
+    case SYS_CLOSE    :          close(0); break;
+    case SYS_FILESIZE : f->eax = filesize(0); break;
+    case SYS_READ     : f->eax = read(0, NULL, 0); break;
+    case SYS_WRITE    : f->eax = write(0, NULL, 0); break;
+    case SYS_SEEK     :          seek(0, 0); break;
+    case SYS_TELL     : f->eax = tell(0); break;
+    default           :          exit_with_error(NULL);
   }
 }
 
@@ -88,23 +88,23 @@ static void halt(void)
   shutdown();
   NOT_REACHED();
 }
-static void exit(int status) NO_RETURN
+static void exit(int32_t status) NO_RETURN
 {
   valid_args_pointers(esp, 1);
   exit_with_error(status);
 }
-static tid_t exec(const char *cmd_line)
+static tid_t exec(char *cmd_line)
 {
   valid_args_pointers(esp, 1);
   valid_string(cmd_line);
   return process_execute(cmd_line);
 }
-static int wait(tid_t pid)
+static int32_t wait(tid_t pid)
 {
   valid_args_pointers(esp, 1);
   return process_wait(pid);
 }
-static bool create(const char *file, unsigned initial_size)
+static bool create(char *file, uint32_t initial_size)
 {
   bool ret;
   valid_args_pointers(esp, 2);
@@ -114,7 +114,7 @@ static bool create(const char *file, unsigned initial_size)
   lock_release(&lo_file_system);
   return ret;
 }
-static bool remove(const char *file)
+static bool remove(char *file)
 {
   bool ret;
   valid_args_pointers(esp, 1);
@@ -124,15 +124,13 @@ static bool remove(const char *file)
   lock_release(&lo_file_system);
   return ret;
 }
-static int open(const char *file)
+static int32_t open(char *file)
 {
-  file = NULL;
   valid_args_pointers(esp, 1);
   return 0;
 }
 static void close(int fd)
 {
-  fd = 0;
   valid_args_pointers(esp, 1);
 }
 static int filesize(int fd)
@@ -140,26 +138,21 @@ static int filesize(int fd)
   valid_args_pointers(esp, 1);
   return fd;
 }
-static int read(int fd, void *buffer, unsigned length)
+static int32_t read(int fd, void *buffer, uint32_t length)
 {
-  buffer = NULL;
-  length = 0;
   valid_args_pointers(esp, 3);
   return 0;
 }
-static int write(int fd, const void *buffer, unsigned length)
+static int32_t write(int fd, void *buffer, uint32_t length)
 {
-  buffer = NULL;
-  length = 0;
   alid_args_pointers(esp, 3);
   return fd;
 }
-static void seek(int fd, unsigned position)
+static void seek(int fd, uint32_t position)
 {
-  fd = fd + position;
   valid_args_pointers(esp, 2);
 }
-static unsigned tell(int fd)
+static uint32_t tell(int fd)
 {
   valid_args_pointers(esp, 1);
   return fd;
