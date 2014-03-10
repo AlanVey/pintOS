@@ -67,7 +67,7 @@ process_execute (const char *fn_with_args)
 
   if (tid == TID_ERROR)
   {
-    palloc_free_page (fn_copy_with_args); 
+    palloc_free_page (fn_with_args_copy; 
   }
   return tid;
 }
