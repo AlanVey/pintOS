@@ -15,12 +15,14 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
 #define LAST_TWO_BITS_ZERO 0xfffffffc
 /* Size of a page */
 #define MAX_BYTES_FOR_ARGS 4096
+#define MAX_FILE_NAME_BYTES 200
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -38,7 +40,7 @@ process_execute (const char *fn_with_args)
 {
   /* To store just the file name. 
      200 is an arbritrary maximum file name size, can be changed later */
-  char fn_extract[200];
+  char *fn_extract;
   char *fn_with_args_copy;
   char *fn_with_args_copy_2;
   tid_t tid;
@@ -62,12 +64,22 @@ process_execute (const char *fn_with_args)
   fn_with_args_copy_2 = palloc_get_page (0);
   if (fn_with_args_copy_2 == NULL)
   {
+    palloc_free_page (fn_with_args_copy);
     return TID_ERROR;
   }
   strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
 
+  /* Reserve space to store the file name */
+  fn_extract = malloc (MAX_FILE_NAME_BYTES);
+  if (fn_extract == NULL) 
+  {
+    palloc_free_page (fn_with_args_copy);
+    palloc_free_page (fn_with_args_copy_2);
+    return TID_ERROR;
+  }
+
   /* Extract file name*/
-  *fn_extract = *(strtok_r (fn_with_args_copy_2, " ", &saveptr));
+  fn_extract = strtok_r (fn_with_args_copy_2, " ", &saveptr);
   palloc_free_page(fn_with_args_copy_2);
 
   /* Create a new thread to execute FILE_NAME. */
@@ -79,6 +91,7 @@ process_execute (const char *fn_with_args)
   }
   return tid;
 }
+
 
 /* A thread function that loads a user process and starts it
    running. */
