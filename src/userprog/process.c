@@ -37,54 +37,48 @@ static struct thread* get_child(pid_t pid);
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *fn_with_args) 
+process_execute (const char *input_from_cmd_line) 
 {
   /* To store just the file name. 
      200 is an arbritrary maximum file name size, can be changed later */
   char *fn_extract;
   char *fn_with_args_copy;
-  char *fn_with_args_copy_2;
   tid_t tid;
   /* Used by strtok_r, although is ignored on the first call */
   char *saveptr;
   /* struct thread *t; */
 
 
-  /* Make a copy of FILE_NAME_WITH_ARGS.
+  /* Make a copy of INPUT_FROM_CMD_LINE.
      Otherwise there's a race between the caller and load() */
   fn_with_args_copy = palloc_get_page (0);
   if (fn_with_args_copy == NULL)
   {
     return TID_ERROR;
   }
-  strlcpy (fn_with_args_copy, fn_with_args, PGSIZE);
+  strlcpy (fn_with_args_copy, input_from_cmd_line, PGSIZE);
 
-  /* Make another copy to extract the file name
-     I didnt use the first copy for this because strtok_r 
-     doesn't ensure the supplied string will be unchanged */
-  fn_with_args_copy_2 = palloc_get_page (0);
-  if (fn_with_args_copy_2 == NULL)
-  {
-    palloc_free_page (fn_with_args_copy);
-    return TID_ERROR;
-  }
-  strlcpy (fn_with_args_copy_2, fn_with_args, PGSIZE);
 
   /* Reserve space to store the file name */
-  fn_extract = malloc (MAX_FILE_NAME_BYTES);
+  fn_extract = palloc_get_page (0);
   if (fn_extract == NULL) 
   {
     palloc_free_page (fn_with_args_copy);
-    palloc_free_page (fn_with_args_copy_2);
     return TID_ERROR;
   }
 
-  /* Extract file name*/
-  fn_extract = strtok_r (fn_with_args_copy_2, " ", &saveptr);
-  palloc_free_page(fn_with_args_copy_2);
+  /* Copy the contents of INPUT_FROM_COMD_LINE into FN_EXTRACT
+     so it can then be tokenised */
+  strlcpy (fn_extract, input_from_cmd_line, PGSIZE);
+  
+  /* Replace INPUT_FROM_CMD_LINE with just the file name of the
+     program to be executed */
+  input_from_cmd_line = strtok_r (fn_extract, " ", &saveptr);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (fn_extract, PRI_DEFAULT, start_process, fn_with_args_copy);
+  tid = thread_create (input_from_cmd_line, PRI_DEFAULT, start_process, fn_with_args_copy);
+
+  palloc_free_page (fn_extract);
 
   if (tid == TID_ERROR)
   {
