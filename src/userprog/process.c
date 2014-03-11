@@ -55,11 +55,11 @@ process_execute (const char *input_from_cmd_line)
   {
     return TID_ERROR;
   }
-  strlcpy (fn_with_args_copy, fn_with_args, PGSIZE);
+  strlcpy (fn_with_args_copy, input_from_cmd_line, PGSIZE);
 
 
   /* Reserve space to store the file name */
-  fn_extract = palloc_get_page (0)
+  fn_extract = palloc_get_page (0);
   if (fn_extract == NULL) 
   {
     palloc_free_page (fn_with_args_copy);
