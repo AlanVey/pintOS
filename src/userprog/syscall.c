@@ -6,14 +6,37 @@
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <debug.h>
 
+//the file indexing starts from the following value
+#define FILE_DESCRIPTOR_INDEX_BASE 2
 // In pintos every process only has one thread can be treated the same
 typedef tid_t pid_t;
+// lock for the file system
+static struct lock lo_file_system;
+// global access to stack pointer to make function declarations easier
+static void *esp;
 
 static void syscall_handler (struct intr_frame *);
+/* Functions for individual system calls */
+static void halt (void);
+static void exit (int status);
+static pid_t exec (const char *cmd_line);
+static int wait (pid_t pid);
+static bool create (const char *file, unsigned initial_size);
+static bool remove (const char *file);
+static int open (const char *file);
+static int filesize (int fd);
+static int read (int fd, void *buffer, unsigned size);
+static int write (int fd, const void *buffer, unsigned size);
+/*
+static void seek (int fd, unsigned position);
+static unsigned tell (int fd);
+static void close (int fd);
+*/
 
 /* Function for reading data at specified *uaddr */
 static int get_user (const uint8_t *uaddr);
@@ -25,28 +48,8 @@ static void valid_string(const char* str);
 static void valid_args_pointers(uint32_t* esp, int num_args);
 /* Function to exit process with an error */
 static void exit_with_error(int status);
-
-/* Functions for individual system calls */
-static void halt (void);
-static void exit (int status);
-static pid_t exec (const char *cmd_line);
-static int wait (pid_t pid);
-static bool create (const char *file, unsigned initial_size);
-static bool remove (const char *file);
-/*
-static int open (const char *file);
-static int filesize (int fd);
-static int read (int fd, void *buffer, unsigned size);
-static int write (int fd, const void *buffer, unsigned size);
-static void seek (int fd, unsigned position);
-static unsigned tell (int fd);
-static void close (int fd);
-*/
-
-// lock for the file system
-static struct lock lo_file_system;
-// global access to stack pointer to make function declarations easier
-static void *esp;
+//returnes a new file descriptor
+static unsigned generate_file_descriptor(void);
 
 void
 syscall_init (void) 
@@ -63,7 +66,7 @@ syscall_handler (struct intr_frame *f)
   esp = f->esp;
   uint32_t syscall = *(uint32_t*)esp;
   if(esp >= PHYS_BASE || get_user(esp) == -1)
-    exit_with_error(0);
+    exit_with_error(-1);
 
   /* SYSTEM CALLS Implementation */
   switch(syscall)
@@ -132,7 +135,7 @@ syscall_handler (struct intr_frame *f)
     {
       break;
     }
-    default: exit_with_error(0);
+    default: exit_with_error(-1);
   }
 }
 
@@ -182,6 +185,35 @@ static bool remove (const char *file)
   lock_release(&lo_file_system);
   return ret;
 }
+static int open (const char *file)
+{
+  lock_acquire(&lo_file_system);
+  struct file *f = filesys_open(file);
+  if(!file)
+  {
+    lock_release(&lo_file_system);
+    exit_with_error(-1);
+  }
+  //creates new file_index which will be stored by reference in l_files_opened
+  struct file_index *fi = malloc(sizeof(struct file_index));
+  fi->i_fd = generate_file_descriptor();
+  fi->f = f;
+  list_push_front(&thread_current()->proc_mask.l_files_opened, &fi->le_file);
+  lock_release(&lo_file_system);
+  return 0;
+}
+static int filesize (int fd)
+{
+
+}
+static int read (int fd, void *buffer, unsigned size)
+{
+
+}
+static int write (int fd, const void *buffer, unsigned size)
+{
+
+}
 
 //==========================================================================//
 //==========================================================================//
@@ -215,7 +247,7 @@ static void valid_string(const char* str)
   for(; (c = (char)*(str + i)) != '\0'; i++)
   {
     if(c == -1)
-      exit_with_error(0);
+      exit_with_error(-1);
   }
 }
 /* Assures user address pointer + offset is in user space.
@@ -223,13 +255,20 @@ static void valid_string(const char* str)
 static void valid_args_pointers(uint32_t* esp, int num_args)
 {
   if(esp + num_args >= (int)PHYS_BASE)
-    exit_with_error(0);
+    exit_with_error(-1);
 }
 
 /* Terminates the process with exit code -1 */
 static void exit_with_error(int status)
 {
-  thread_current()->exit_value = status ? status : -1;
+  thread_current()->exit_value = status;
   thread_exit();
   NOT_REACHED();
+}
+
+//returnes a new file descriptor
+static unsigned generate_file_descriptor(void)
+{
+  unsigned stat_u_file_index = FILE_DESCRIPTOR_INDEX_BASE;
+  return ++stat_u_file_index;
 }

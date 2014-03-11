@@ -240,6 +240,7 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
 int
 process_wait (tid_t child_tid) 
 {
+  while(child_tid == child_tid);
   return child_tid;
 }
 
