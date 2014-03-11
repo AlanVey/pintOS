@@ -20,7 +20,7 @@ typedef tid_t fid_t;
 // lock for the file system
 static struct lock lo_file_system;
 // global access to stack pointer to make function declarations easier
-static void *esp;
+static void* esp;
 // Struct so threads can keep track of open files
 static struct myfile
 {
@@ -40,12 +40,10 @@ static bool remove(const char *file);
 static int open(const char *file);
 static void close(int fd);
 static int filesize(int fd);
-/*
 static int read(int fd, void *buffer, unsigned size);
 static int write(int fd, const void *buffer, unsigned size);
 static void seek(int fd, unsigned position);
 static unsigned tell(int fd);
-*/
 
 /* Function for reading data at specified *uaddr */
 static int get_user (const uint8_t *uaddr);
@@ -125,6 +123,8 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CLOSE: 
     {
+      int fd = *(int*)(esp + 1);
+      close(fd);
       break;
     }
     case SYS_FILESIZE: 
@@ -135,18 +135,31 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_READ: 
     {
+      int fd = *(int*)(esp + 1);
+      void* buffer = *(esp + 2);
+      unsigned size = *(unsigned*)(esp + 3);
+      f->eax = read(fb, buffer, size)
       break;
     }
     case SYS_WRITE: 
     {
+      int fd = *(int*)(esp + 1);
+      const void* buffer = *(esp + 2);
+      unsigned size = *(unsigned*)(esp + 3);
+      f->eax = write(fd, buffer, size);
       break;
     }
     case SYS_SEEK: 
     {
+      int fd = *(int*)(esp + 1);
+      unsigned position = *(unsigned*)(esp + 2);
+      seek(fd, position);
       break;
     }
     case SYS_TELL: 
     {
+      int fd = *(int*)(esp + 1);
+      f->eax = tell(fd);
       break;
     }
     default: exit(-1);
@@ -254,6 +267,22 @@ static int filesize (int fd)
   lock_release(&lo_file_system);
 
   return size;
+}
+static int read(int fd, void *buffer, unsigned size)
+{
+  return 0;
+}
+static int write(int fd, const void *buffer, unsigned size)
+{
+  return 0;
+}
+static void seek(int fd, unsigned position)
+{
+
+}
+static unsigned tell(int fd)
+{
+  return 0;
 }
 
 //==========================================================================//
