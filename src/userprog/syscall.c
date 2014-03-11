@@ -94,7 +94,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_CREATE: 
     {
       const char* file = *(char**)(esp + 1);
-      unsigned initial_size = (unsigned)*(esp + 2);
+      unsigned initial_size = *(unsigned*)(esp + 2);
       f->eax = create(file, initial_size);
       break;
     }
@@ -222,7 +222,7 @@ static void valid_string(const char* str)
    Cleans up resources if not and kills process. */
 static void valid_args_pointers(uint32_t* esp, int num_args)
 {
-  if(esp + num_args >= PHYS_BASE)
+  if(esp + num_args >= (int)PHYS_BASE)
     exit_with_error(0);
 }
 
