@@ -68,7 +68,7 @@ process_execute (const char *input_from_cmd_line)
 
   /* Copy the contents of INPUT_FROM_COMD_LINE into FN_EXTRACT
      so it can then be tokenised */
-  strlcpy (fn_extract, input_from_cmd_line, PGSIZE)
+  strlcpy (fn_extract, input_from_cmd_line, PGSIZE);
   
   /* Replace INPUT_FROM_CMD_LINE with just the file name of the
      program to be executed */
