@@ -660,9 +660,7 @@ init_thread (struct thread *t, const char *name, int priority)
     t->parent     = thread_current();
     t->waited     = false;
     t->exited     = false;
-
-    sema_init(&(t->wait_s), 0); 
-    sema_init(&(t->exit_s), 0);    
+ 
     list_init(&(t->files));
     list_init(&(t->children));
 

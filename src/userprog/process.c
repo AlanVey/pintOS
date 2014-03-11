@@ -24,12 +24,14 @@
 #define MAX_BYTES_FOR_ARGS 4096
 #define MAX_FILE_NAME_BYTES 200
 
+typedef tid_t pid_t;
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool initialise_program_stack (void **esp, char *token, char **saveptr);
 /* Function indirectly used as part of SYS_WAIT implementation */
 static void find_thread(struct thread *t, void *aux);
-static struct thread* get_child(pid_t pid);
+static struct thread* get_child(struct list* l, pid_t pid);
 
 
 /* Starts a new thread running a user program loaded from
@@ -84,13 +86,6 @@ process_execute (const char *input_from_cmd_line)
   {
     palloc_free_page (fn_with_args_copy); 
   }
-  else
-  {
-    sema_down(&(get_child(tid)->wait_s));
-    if (t->exit_value == -1)
-      tid = TID_ERROR;
-  }
-
   return tid;
 }
 
@@ -121,7 +116,6 @@ start_process (void *file_name_)
   success = load (token, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  sema_up(&cur->wait_s);
   if (!success) 
   {
     palloc_free_page (file_name);
@@ -253,9 +247,7 @@ process_wait (pid_t child_pid)
   if(child->exited)
     return child->exit_value;
 
-  sema_down(&(t->wait_s));
   ret = child->exit_value;
-  sema_up(&(t->exit_s));
 
   child->waited = true;
   return ret;
@@ -269,12 +261,7 @@ process_exit (void)
   uint32_t *pd;
 
   // Makes sure parent process is no longer waiting on it
-  struct list l = cur->wait_s.waiters;
-  while (!list_empty(l))
-    sema_up(&cur->wait_s);
-  cur->exited = true;
-  if(!cur->parent)
-    sema_down(&cur->exit_s); 
+  cur->exited = true; 
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

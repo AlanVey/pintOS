@@ -113,8 +113,6 @@ struct thread
     int32_t exit_value;
     struct list files;
     
-    struct semaphore wait_s;
-    struct semaphore exit_s;
     bool waited;
     bool exited;
     struct thread* parent;
