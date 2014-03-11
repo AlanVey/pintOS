@@ -61,7 +61,7 @@ syscall_handler (struct intr_frame *f)
 {
   /* Checks the user address pointer is valid */
   esp = f->esp;
-  uint32_t syscall = (uint32_t)*esp;
+  uint32_t syscall = *(uint32_t*)esp;
   if(esp >= PHYS_BASE || get_user(esp) == -1)
     exit_with_error(0);
 
@@ -75,32 +75,32 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_EXIT: 
     {
-      int status = (int)*(esp + 1);
+      int status = *(int*)(esp + 1);
       exit(status);
       break;
     }
     case SYS_EXEC: 
     {
-      const char* cmd_line = (char*)*(esp + 1);
+      const char* cmd_line = *(char**)(esp + 1);
       f->eax = exec(cmd_line);
       break;
     }
     case SYS_WAIT: 
     {
-      pid_t pid = (pid_t)*(esp + 1);
+      pid_t pid = *(pid_t*)(esp + 1);
       f->eax = wait(pid);
       break;   
     }                        
     case SYS_CREATE: 
     {
-      const char* file = (char*)*(esp + 1);
+      const char* file = *(char**)(esp + 1);
       unsigned initial_size = (unsigned)*(esp + 2);
       f->eax = create(file, initial_size);
       break;
     }
     case SYS_REMOVE: 
     {
-      const char* file = (char*)*(esp + 1);
+      const char* file = *(char**)(esp + 1);
       f->eax = remove(file);
       break;
     }
