@@ -1,4 +1,5 @@
 #include "devices/shutdown.h"
+#include "filesys/filesys.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
 #include "threads/interrupt.h"
@@ -9,18 +10,21 @@
 #include <syscall-nr.h>
 #include <debug.h>
 
+// In pintos every process only has one thread can be treated the same
+typedef tid_t pid_t;
+
 static void syscall_handler (struct intr_frame *);
 
 /* Function for reading data at specified *uaddr */
-static int get_user (const uint32_t *uaddr);
+static int get_user (const uint8_t *uaddr);
 /* Function for writing data (byte) at specified address (*uaddr) */
 static bool put_user (uint8_t *udst, uint8_t byte);
 /* Function for String verification */
-static void valid_string(const char* str);
+static void valid_string();
 /* Function to verify user address pointers */
-static void valid_args_pointers(uint32_t* esp, uint8_t num_args);
+static void valid_args_pointers(uint32_t* esp, int num_args);
 /* Function to exit process with an error */
-static void exit_with_error(uint32_t status);
+static void exit_with_error(int status);
 
 /* Functions for individual system calls */
 static void halt (void);
@@ -28,8 +32,8 @@ static void exit (int status);
 static pid_t exec (const char *cmd_line);
 static int wait (pid_t pid);
 static bool create (const char *file, unsigned initial_size);
-/*
 static bool remove (const char *file);
+/*
 static int open (const char *file);
 static int filesize (int fd);
 static int read (int fd, void *buffer, unsigned size);
@@ -58,10 +62,10 @@ syscall_handler (struct intr_frame *f)
   /* Checks the user address pointer is valid */
   esp = f->esp;
   if(esp >= PHYS_BASE || get_user(esp) == -1)
-    exit_with_error(NULL);
+    exit_with_error(0);
 
   /* SYSTEM CALLS Implementation */
-  switch(*esp)
+  switch((uint32_t)*esp)
   {
     case SYS_HALT: 
     {
@@ -114,7 +118,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_TELL: 
       break;
     default: 
-      exit_with_error(NULL);
+      exit_with_error(0);
   }
 }
 
@@ -149,7 +153,7 @@ static bool create (const char *file, unsigned initial_size)
   bool ret;
   valid_args_pointers(esp, 2);
   valid_string(file);
-  lock_aquire(&lo_file_system);
+  lock_acquire(&lo_file_system);
   ret = filesys_create(file, initial_size);
   lock_release(&lo_file_system);
   return ret;
@@ -158,7 +162,7 @@ static bool remove (const char *file)
 {
   bool ret;
   valid_args_pointers(esp, 1);
-  valid_string(*file);
+  valid_string(file);
   lock_aquire(&lo_file_system);
   ret = filesys_remove(file);
   lock_release(&lo_file_system);
@@ -190,25 +194,26 @@ static bool put_user (uint8_t *udst, uint8_t byte)
   return error_code != -1;
 }
 /* Checks a Sting and assures it is \0 terminated and no error value */
-static void valid_string(const char* str)
+static void valid_string()
 {
   char c;
-  for(int i = 0; c = get_user(esp + i) != '\0'; i++)
+  int i = 0;
+  for(; c = get_user(esp + i) != '\0'; i++)
   {
     if(c == -1)
-      exit_with_error(NULL);
+      exit_with_error(0);
   }
 }
 /* Assures user address pointer + offset is in user space.
    Cleans up resources if not and kills process. */
-static void valid_args_pointers(uint32_t* esp, int8_t num_arg)
+static void valid_args_pointers(uint32_t* esp, int num_args)
 {
   if(esp + num_arg >= PHYS_BASE)
-    exit_with_error(NULL);
+    exit_with_error(0);
 }
 
 /* Terminates the process with exit code -1 */
-static void exit_with_error(int32_t status)
+static void exit_with_error(int status)
 {
   thread_current()->exit_value = status ? status : -1;
   thread_exit();
