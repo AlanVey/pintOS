@@ -18,9 +18,9 @@ static void syscall_handler (struct intr_frame *);
 /* Function for reading data at specified *uaddr */
 static int get_user (const uint8_t *uaddr);
 /* Function for writing data (byte) at specified address (*uaddr) */
-static bool put_user (uint8_t *udst, uint8_t byte);
+// static bool put_user (uint8_t *udst, uint8_t byte);
 /* Function for String verification */
-static void valid_string();
+static void valid_string(const char* str);
 /* Function to verify user address pointers */
 static void valid_args_pointers(uint32_t* esp, int num_args);
 /* Function to exit process with an error */
@@ -61,11 +61,12 @@ syscall_handler (struct intr_frame *f)
 {
   /* Checks the user address pointer is valid */
   esp = f->esp;
+  uint32_t syscall = (uint32_t)*esp;
   if(esp >= PHYS_BASE || get_user(esp) == -1)
     exit_with_error(0);
 
   /* SYSTEM CALLS Implementation */
-  switch((uint32_t)*esp)
+  switch(syscall)
   {
     case SYS_HALT: 
     {
@@ -104,21 +105,34 @@ syscall_handler (struct intr_frame *f)
       break;
     }
     case SYS_OPEN: 
+    {
       break;
+    }
     case SYS_CLOSE: 
+    {
       break;
+    }
     case SYS_FILESIZE: 
+    {
       break;
+    }
     case SYS_READ: 
+    {
       break;
+    }
     case SYS_WRITE: 
+    {
       break;
+    }
     case SYS_SEEK: 
+    {
       break;
+    }
     case SYS_TELL: 
+    {
       break;
-    default: 
-      exit_with_error(0);
+    }
+    default: exit_with_error(0);
   }
 }
 
@@ -163,7 +177,7 @@ static bool remove (const char *file)
   bool ret;
   valid_args_pointers(esp, 1);
   valid_string(file);
-  lock_aquire(&lo_file_system);
+  lock_acquire(&lo_file_system);
   ret = filesys_remove(file);
   lock_release(&lo_file_system);
   return ret;
@@ -185,20 +199,20 @@ static int get_user (const uint8_t *uaddr)
 }
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
-   Returns true if successful, false if a segfault occurred. */
+   Returns true if successful, false if a segfault occurred. 
 static bool put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
   return error_code != -1;
-}
+} */
 /* Checks a Sting and assures it is \0 terminated and no error value */
-static void valid_string()
+static void valid_string(const char* str)
 {
   char c;
   int i = 0;
-  for(; c = get_user(esp + i) != '\0'; i++)
+  for(; (c = (char)*(str + i)) != '\0'; i++)
   {
     if(c == -1)
       exit_with_error(0);
@@ -208,7 +222,7 @@ static void valid_string()
    Cleans up resources if not and kills process. */
 static void valid_args_pointers(uint32_t* esp, int num_args)
 {
-  if(esp + num_arg >= PHYS_BASE)
+  if(esp + num_args >= PHYS_BASE)
     exit_with_error(0);
 }
 
