@@ -73,7 +73,7 @@ syscall_handler (struct intr_frame *f)
 {
   esp = f->esp;
   /* Checks the user address pointer is valid */
-  valid_args_pointers()
+  valid_args_pointers();
   uint32_t syscall = *(uint32_t*)esp;
   /* SYSTEM CALLS Implementation */
   switch(syscall)
@@ -129,6 +129,8 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_FILESIZE: 
     {
+      int fd = *(int*)(esp + 1);
+      f->eax = filesize(fd);	
       break;
     }
     case SYS_READ: 
@@ -220,13 +222,13 @@ static int filesize (int fd)
 {
   struct myfile* f;
   int size;
-  struct list_elem* elem;
+  struct list_elem* el;
   struct thread* t = thread_current();
 
-  for (elem = list_begin(&t->files); elem != list_end(&t->files);
-       elem = list_next(elem))
+  for (el = list_begin(&t->files); el != list_end(&t->files);
+       el = list_next(el))
   {
-    f = list_entry(elem, struct user_file, struct elem);
+    f = list_entry(el, struct myfile, elem);
     if(f->fid == fd) 
       break;
   }
@@ -280,6 +282,7 @@ static void valid_string(const char* str)
 }
 /* Assures user address pointer + offset is in user space.
    Cleans up resources if not and kills process. */
+
 static void valid_args_pointers()
 {
   if((*(int*)esp >= *(int*)PHYS_BASE || get_user(esp) == -1) && 

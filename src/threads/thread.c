@@ -657,7 +657,7 @@ init_thread (struct thread *t, const char *name, int priority)
   // Initialises values used for SYSCALLs
   #ifdef USERPROG
     t->exit_value = 0;
-    list_init(t->files);
+    list_init(&(t->files));
   #endif
 
   old_level = intr_disable ();
