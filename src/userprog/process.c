@@ -22,7 +22,6 @@
 #define LAST_TWO_BITS_ZERO 0xfffffffc
 /* Size of a page */
 #define MAX_BYTES_FOR_ARGS 4096
-#define MAX_FILE_NAME_BYTES 200
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
