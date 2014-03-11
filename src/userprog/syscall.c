@@ -29,22 +29,22 @@ static struct myfile
   struct list_elem elem;
 };
 
-static void syscall_handler (struct intr_frame *);
+static void syscall_handler(struct intr_frame *);
 /* Functions for individual system calls */
-static void halt (void);
-static void exit (int status);
-static pid_t exec (const char *cmd_line);
-static int wait (pid_t pid);
-static bool create (const char *file, unsigned initial_size);
-static bool remove (const char *file);
-static int open (const char *file);
-static int filesize (int fd);
+static void halt(void);
+static void exit(int status);
+static pid_t exec(const char *cmd_line);
+static int wait(pid_t pid);
+static bool create(const char *file, unsigned initial_size);
+static bool remove(const char *file);
+static int open(const char *file);
+static void close(int fd);
+static int filesize(int fd);
 /*
-static int read (int fd, void *buffer, unsigned size);
-static int write (int fd, const void *buffer, unsigned size);
-static void seek (int fd, unsigned position);
-static unsigned tell (int fd);
-static void close (int fd);
+static int read(int fd, void *buffer, unsigned size);
+static int write(int fd, const void *buffer, unsigned size);
+static void seek(int fd, unsigned position);
+static unsigned tell(int fd);
 */
 
 /* Function for reading data at specified *uaddr */
@@ -117,10 +117,10 @@ syscall_handler (struct intr_frame *f)
     case SYS_OPEN: 
     {
       const char *file = *(char**)(esp + 1);
-      bool ret = open(file);
+      int ret = open(file);
       f->eax = ret;
       if(ret == -1)
-        exit_with_error(ret);
+        exit(ret);
       break;
     }
     case SYS_CLOSE: 
@@ -147,7 +147,7 @@ syscall_handler (struct intr_frame *f)
     {
       break;
     }
-    default: exit_with_error(-1);
+    default: exit(-1);
   }
 }
 
@@ -163,6 +163,14 @@ static void halt (void)
 }
 static void exit (int status)
 {
+  if(lock_held_by_current_thread(&lo_file_system))
+    lock_release (&lo_file_system);
+  
+  while (!list_empty(&t->files))
+  {
+    close(list_entry(list_begin(&t->files), struct myfile, thread_elem)->fid);
+  }
+  
   exit_with_error(status);
 }
 static pid_t exec (const char *cmd_line)
@@ -215,6 +223,11 @@ static int open (const char *file)
   
   lock_release(&lo_file_system);
   return myf->fid;
+}
+static void close(int fd)
+{
+  if(fd == 0)
+    fd = 1;
 }
 static int filesize (int fd)
 {

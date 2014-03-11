@@ -29,6 +29,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool initialise_program_stack (void **esp, char *token, char **saveptr);
 /* Function indirectly used as part of SYS_WAIT implementation */
 static void find_thread(struct thread *t, void *aux);
+static struct thread* get_child(pid_t pid);
 
 
 /* Starts a new thread running a user program loaded from
@@ -89,6 +90,13 @@ process_execute (const char *fn_with_args)
   {
     palloc_free_page (fn_with_args_copy); 
   }
+  else
+  {
+    sema_down(&(get_child(tid)->wait_s));
+    if (t->exit_value == -1)
+      tid = TID_ERROR;
+  }
+
   return tid;
 }
 
@@ -119,9 +127,11 @@ start_process (void *file_name_)
   success = load (token, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
+  sema_up(&cur->wait_s);
   if (!success) 
   {
     palloc_free_page (file_name);
+    cur->exit_value = -1;
     thread_exit ();
   }
   else 
@@ -237,11 +247,24 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int
-process_wait (tid_t child_tid) 
+int 
+process_wait (pid_t child_pid) 
 {
-  while(child_tid == child_tid);
-  return child_tid;
+  int ret;
+  struct thread* t = thread_current();
+  struct thread* child = get_child(&(t->children), child_pid);
+
+  if(child == NULL || child->waited)
+    return -1;
+  if(child->exited)
+    return child->exit_value;
+
+  sema_down(&(t->wait_s));
+  ret = child->exit_value;
+  sema_up(&(t->exit_s));
+
+  child->waited = true;
+  return ret;
 }
 
 /* Free the current process's resources. */
@@ -250,6 +273,14 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  // Makes sure parent process is no longer waiting on it
+  struct list l = cur->wait_s.waiters;
+  while (!list_empty(l))
+    sema_up(&cur->wait_s);
+  cur->exited = true;
+  if(!cur->parent)
+    sema_down(&cur->exit_s); 
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -615,4 +646,20 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+//extracts the process  which executes the current threads then, searches in
+//its list of acquired files the one referenced by the current file descriptor
+static struct thread* get_child(struct list* l, pid_t pid)
+{
+  struct list_elem* elem;
+
+  for(elem = list_begin(l); elem != list_end(l); elem = list_next(elem))
+  {
+    struct thread* child = list_entry(elem, struct lineage, struct elem);
+    if(child->tid == pid)
+      return child;
+  }
+
+  return NULL;
 }
