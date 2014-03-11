@@ -1,5 +1,6 @@
 #include "devices/shutdown.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
 #include "threads/interrupt.h"
@@ -109,6 +110,11 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_OPEN: 
     {
+      const char *file = *(char**)(esp + 1);
+      bool ret = open(file);
+      f->eax = ret;
+      if(ret == -1)
+        exit_with_error(ret);
       break;
     }
     case SYS_CLOSE: 
@@ -187,12 +193,13 @@ static bool remove (const char *file)
 }
 static int open (const char *file)
 {
+  valid_args_pointers(esp, 1);
   lock_acquire(&lo_file_system);
   struct file *f = filesys_open(file);
-  if(!file)
+  if(!valid_string(file))
   {
     lock_release(&lo_file_system);
-    exit_with_error(-1);
+    return -1;
   }
   //creates new file_index which will be stored by reference in l_files_opened
   struct file_index *fi = malloc(sizeof(struct file_index));
