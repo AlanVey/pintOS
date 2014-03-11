@@ -1,46 +1,64 @@
 #include "devices/shutdown.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <debug.h>
 
-static void syscall_handler (struct intr_frame *);
-
-/* Function for reading data at specified *uaddr */
-static int get_user (const uint32_t *uaddr);
-/* Function for writing data (byte) at specified address (*uaddr) */
-static bool put_user (uint8_t *udst, uint8_t byte);
-/* Function for String verification */
-static void valid_string(const char* str);
-/* Function to verify user address pointers */
-static void valid_args_pointers(uint32_t* esp, uint8_t num_args);
-/* Function to exit process with an error */
-static void exit_with_error(uint32_t status);
-
-/* Functions for individual system calls */
-static void halt     (void);
-static void exit     (int status) NO_RETURN;
-static tid_t exec    (char *file);
-static int wait      (tid_t tid);
-static bool create   (char *file, unsigned initial_size);
-static bool remove   (char *file);
-static int open      (char *file);
-static void close    (int fd);
-static int filesize  (int fd);
-static int read      (int fd, void *buffer, unsigned length);
-static int write     (int fd, void *buffer, unsigned length);
-static void seek     (int fd, unsigned position);
-static unsigned tell (int fd);
-
+//the file indexing starts from the following value
+#define FILE_DESCRIPTOR_INDEX_BASE 2
+// In pintos every process only has one thread can be treated the same
+typedef tid_t pid_t;
+typedef tid_t fid_t;
 // lock for the file system
 static struct lock lo_file_system;
 // global access to stack pointer to make function declarations easier
-static uint32_t *esp;
+static void *esp;
+// Struct so threads can keep track of open files
+static struct myfile
+{
+  fid_t fid;
+  struct file *file;                 
+  struct list_elem elem;
+};
+
+static void syscall_handler (struct intr_frame *);
+/* Functions for individual system calls */
+static void halt (void);
+static void exit (int status);
+static pid_t exec (const char *cmd_line);
+static int wait (pid_t pid);
+static bool create (const char *file, unsigned initial_size);
+static bool remove (const char *file);
+static int open (const char *file);
+static int filesize (int fd);
+/*
+static int read (int fd, void *buffer, unsigned size);
+static int write (int fd, const void *buffer, unsigned size);
+static void seek (int fd, unsigned position);
+static unsigned tell (int fd);
+static void close (int fd);
+*/
+
+/* Function for reading data at specified *uaddr */
+static int get_user (const uint8_t *uaddr);
+/* Function for writing data (byte) at specified address (*uaddr) */
+// static bool put_user (uint8_t *udst, uint8_t byte);
+/* Function for String verification */
+static void valid_string(const char* str);
+/* Function to verify user address pointers */
+static void valid_args_pointers();
+/* Function to exit process with an error */
+static void exit_with_error(int status);
+//returnes a new file descriptor
+static unsigned generate_file_descriptor(void);
 
 void
 syscall_init (void) 
@@ -53,28 +71,85 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  /* Checks the user address pointer is valid */
   esp = f->esp;
-  if(esp >= PHYS_BASE || get_user(esp) == -1)
-    exit_with_error(NULL);
-
+  /* Checks the user address pointer is valid */
+  valid_args_pointers();
+  uint32_t syscall = *(uint32_t*)esp;
   /* SYSTEM CALLS Implementation */
-  switch(*esp)
+  switch(syscall)
   {
-    case SYS_HALT     :          halt(); break;
-    case SYS_EXIT     :          exit((int32_t)*(esp + 1)); break;
-    case SYS_EXEC     : f->eax = exec(NULL); break;
-    case SYS_WAIT     : f->eax = wait((tid_t)*(esp + 1)); break;                           
-    case SYS_CREATE   : f->eax = create(NULL, 0); break;
-    case SYS_REMOVE   : f->eax = remove(NULL); break;
-    case SYS_OPEN     : f->eax = open(NULL); break;
-    case SYS_CLOSE    :          close(0); break;
-    case SYS_FILESIZE : f->eax = filesize(0); break;
-    case SYS_READ     : f->eax = read(0, NULL, 0); break;
-    case SYS_WRITE    : f->eax = write(0, NULL, 0); break;
-    case SYS_SEEK     :          seek(0, 0); break;
-    case SYS_TELL     : f->eax = tell(0); break;
-    default           :          exit_with_error(NULL);
+    case SYS_HALT: 
+    {
+      halt();
+      break;
+    }
+    case SYS_EXIT: 
+    {
+      int status = *(int*)(esp + 1);
+      exit(status);
+      break;
+    }
+    case SYS_EXEC: 
+    {
+      const char* cmd_line = *(char**)(esp + 1);
+      f->eax = exec(cmd_line);
+      break;
+    }
+    case SYS_WAIT: 
+    {
+      pid_t pid = *(pid_t*)(esp + 1);
+      f->eax = wait(pid);
+      break;   
+    }                        
+    case SYS_CREATE: 
+    {
+      const char* file = *(char**)(esp + 1);
+      unsigned initial_size = *(unsigned*)(esp + 2);
+      f->eax = create(file, initial_size);
+      break;
+    }
+    case SYS_REMOVE: 
+    {
+      const char* file = *(char**)(esp + 1);
+      f->eax = remove(file);
+      break;
+    }
+    case SYS_OPEN: 
+    {
+      const char *file = *(char**)(esp + 1);
+      bool ret = open(file);
+      f->eax = ret;
+      if(ret == -1)
+        exit_with_error(ret);
+      break;
+    }
+    case SYS_CLOSE: 
+    {
+      break;
+    }
+    case SYS_FILESIZE: 
+    {
+      int fd = *(int*)(esp + 1);
+      f->eax = filesize(fd);	
+      break;
+    }
+    case SYS_READ: 
+    {
+      break;
+    }
+    case SYS_WRITE: 
+    {
+      break;
+    }
+    case SYS_SEEK: 
+    {
+      break;
+    }
+    case SYS_TELL: 
+    {
+      break;
+    }
+    default: exit_with_error(-1);
   }
 }
 
@@ -83,79 +158,88 @@ syscall_handler (struct intr_frame *f)
 // System Call Functions
 //==========================================================================//
 //==========================================================================//
-static void halt(void)
+static void halt (void)
 {
   shutdown();
   NOT_REACHED();
 }
-static void exit(int32_t status)
+static void exit (int status)
 {
-  valid_args_pointers(esp, 1);
   exit_with_error(status);
 }
-static tid_t exec(char *cmd_line)
+static pid_t exec (const char *cmd_line)
 {
-  valid_args_pointers(esp, 1);
   valid_string(cmd_line);
   return process_execute(cmd_line);
 }
-static int32_t wait(tid_t pid)
+static int wait (pid_t pid)
 {
-  valid_args_pointers(esp, 1);
   return process_wait(pid);
 }
-static bool create(char *file, uint32_t initial_size)
+static bool create (const char *file, unsigned initial_size)
 {
   bool ret;
-  valid_args_pointers(esp, 2);
-  valid_string(*file);
-  lock_aquire(&lo_file_system);
+  valid_string(file);
+  lock_acquire(&lo_file_system);
   ret = filesys_create(file, initial_size);
   lock_release(&lo_file_system);
   return ret;
 }
-static bool remove(char *file)
+static bool remove (const char *file)
 {
   bool ret;
-  valid_args_pointers(esp, 1);
-  valid_string(*file);
-  lock_aquire(&lo_file_system);
+  valid_string(file);
+  lock_acquire(&lo_file_system);
   ret = filesys_remove(file);
   lock_release(&lo_file_system);
   return ret;
 }
-static int32_t open(char *file)
+static int open (const char *file)
 {
-  valid_args_pointers(esp, 1);
-  return 0;
+  struct file* f;
+  struct myfile* myf;
+
+  valid_string(file);
+  lock_acquire(&lo_file_system);
+  
+  f = filesys_open(file);
+  if(!f) 
+    return -1;
+  myf = malloc(sizeof(struct myfile));
+  if(!myf)
+  {
+    file_close(f);
+    return -1;
+  }
+  myf->fid = generate_file_descriptor();
+  myf->file = f;
+  list_push_front(&thread_current()->files, &myf->elem);
+  
+  lock_release(&lo_file_system);
+  return myf->fid;
 }
-static void close(int fd)
+static int filesize (int fd)
 {
-  valid_args_pointers(esp, 1);
-}
-static int filesize(int fd)
-{
-  valid_args_pointers(esp, 1);
-  return fd;
-}
-static int32_t read(int fd, void *buffer, uint32_t length)
-{
-  valid_args_pointers(esp, 3);
-  return 0;
-}
-static int32_t write(int fd, void *buffer, uint32_t length)
-{
-  alid_args_pointers(esp, 3);
-  return fd;
-}
-static void seek(int fd, uint32_t position)
-{
-  valid_args_pointers(esp, 2);
-}
-static uint32_t tell(int fd)
-{
-  valid_args_pointers(esp, 1);
-  return fd;
+  struct myfile* f;
+  int size;
+  struct list_elem* el;
+  struct thread* t = thread_current();
+
+  for (el = list_begin(&t->files); el != list_end(&t->files);
+       el = list_next(el))
+  {
+    f = list_entry(el, struct myfile, elem);
+    if(f->fid == fd) 
+      break;
+  }
+
+  if(f->fid != fd)
+    return -1;
+  lock_acquire(&lo_file_system);
+  size = file_length(f->file);
+  lock_release(&lo_file_system);
+
+  return size;
 }
 
 //==========================================================================//
@@ -174,36 +258,49 @@ static int get_user (const uint8_t *uaddr)
 }
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
-   Returns true if successful, false if a segfault occurred. */
+   Returns true if successful, false if a segfault occurred. 
 static bool put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
   return error_code != -1;
-}
+} */
 /* Checks a Sting and assures it is \0 terminated and no error value */
 static void valid_string(const char* str)
 {
   char c;
-  for(int i = 0; c = get_user(esp + i) != '\0'; i++)
+  int i = 0;
+  if(str == NULL)
+    exit_with_error(-1);
+
+  for(; (c = (char)*(str + i)) != '\0'; i++)
   {
     if(c == -1)
-      exit_with_error(NULL);
+      exit_with_error(-1);
   }
 }
 /* Assures user address pointer + offset is in user space.
    Cleans up resources if not and kills process. */
-static void valid_args_pointers(uint32_t* esp, int8_t num_arg)
+
+static void valid_args_pointers()
 {
-  if(esp + num_arg >= PHYS_BASE)
-    exit_with_error(NULL);
+  if((*(int*)esp >= *(int*)PHYS_BASE || get_user(esp) == -1) && 
+     (*(int*)(esp + 3) >= *(int*)PHYS_BASE))
+    exit_with_error(-1);
 }
 
 /* Terminates the process with exit code -1 */
-static void exit_with_error(int32_t status)
+static void exit_with_error(int status)
 {
-  thread_current()->exit_value = status ? status : -1;
+  thread_current()->exit_value = status;
   thread_exit();
   NOT_REACHED();
+}
+
+//returnes a new file descriptor
+static unsigned generate_file_descriptor(void)
+{
+  static unsigned stat_u_file_index = FILE_DESCRIPTOR_INDEX_BASE;
+  return ++stat_u_file_index;
 }
