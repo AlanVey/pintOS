@@ -16,10 +16,18 @@
 #define FILE_DESCRIPTOR_INDEX_BASE 2
 // In pintos every process only has one thread can be treated the same
 typedef tid_t pid_t;
+typedef tid_t fid_t;
 // lock for the file system
 static struct lock lo_file_system;
 // global access to stack pointer to make function declarations easier
 static void *esp;
+// Struct so threads can keep track of open files
+static struct myfile
+{
+  fid_t fid;
+  struct file *file;                 
+  struct list_elem elem;
+};
 
 static void syscall_handler (struct intr_frame *);
 /* Functions for individual system calls */
@@ -31,9 +39,9 @@ static bool create (const char *file, unsigned initial_size);
 static bool remove (const char *file);
 static int open (const char *file);
 static int filesize (int fd);
+/*
 static int read (int fd, void *buffer, unsigned size);
 static int write (int fd, const void *buffer, unsigned size);
-/*
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
@@ -46,7 +54,7 @@ static int get_user (const uint8_t *uaddr);
 /* Function for String verification */
 static void valid_string(const char* str);
 /* Function to verify user address pointers */
-static void valid_args_pointers(uint32_t* esp, int num_args);
+static void valid_args_pointers();
 /* Function to exit process with an error */
 static void exit_with_error(int status);
 //returnes a new file descriptor
@@ -63,12 +71,10 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) 
 {
-  /* Checks the user address pointer is valid */
   esp = f->esp;
+  /* Checks the user address pointer is valid */
+  valid_args_pointers()
   uint32_t syscall = *(uint32_t*)esp;
-  if(esp >= PHYS_BASE || get_user(esp) == -1)
-    exit_with_error(-1);
-
   /* SYSTEM CALLS Implementation */
   switch(syscall)
   {
@@ -157,24 +163,20 @@ static void halt (void)
 }
 static void exit (int status)
 {
-  valid_args_pointers(esp, 1);
   exit_with_error(status);
 }
 static pid_t exec (const char *cmd_line)
 {
-  valid_args_pointers(esp, 1);
   valid_string(cmd_line);
   return process_execute(cmd_line);
 }
 static int wait (pid_t pid)
 {
-  valid_args_pointers(esp, 1);
   return process_wait(pid);
 }
 static bool create (const char *file, unsigned initial_size)
 {
   bool ret;
-  valid_args_pointers(esp, 2);
   valid_string(file);
   lock_acquire(&lo_file_system);
   ret = filesys_create(file, initial_size);
@@ -184,7 +186,6 @@ static bool create (const char *file, unsigned initial_size)
 static bool remove (const char *file)
 {
   bool ret;
-  valid_args_pointers(esp, 1);
   valid_string(file);
   lock_acquire(&lo_file_system);
   ret = filesys_remove(file);
@@ -193,33 +194,50 @@ static bool remove (const char *file)
 }
 static int open (const char *file)
 {
-  valid_args_pointers(esp, 1);
+  struct file* f;
+  struct myfile* myf;
+
+  valid_string(file);
   lock_acquire(&lo_file_system);
-  struct file *f = filesys_open(file);
-  if(!valid_string(file))
+  
+  f = filesys_open(file);
+  if(!f) 
+    return -1;
+  myf = malloc(sizeof(struct myfile));
+  if(!myf)
   {
-    lock_release(&lo_file_system);
+    file_close(f);
     return -1;
   }
-  //creates new file_index which will be stored by reference in l_files_opened
-  struct file_index *fi = malloc(sizeof(struct file_index));
-  fi->i_fd = generate_file_descriptor();
-  fi->f = f;
-  list_push_front(&thread_current()->proc_mask.l_files_opened, &fi->le_file);
+  myf->fid = generate_file_descriptor();
+  myf->file = f;
+  list_push_front(&thread_current()->files, &myf->elem);
+  
   lock_release(&lo_file_system);
-  return 0;
+  return myf->fid;
 }
 static int filesize (int fd)
 {
+  struct myfile* f;
+  int size;
+  struct list_elem* elem;
+  struct thread* t = thread_current();
 
-}
-static int read (int fd, void *buffer, unsigned size)
-{
+  for (elem = list_begin(&t->files); elem != list_end(&t->files);
+       elem = list_next(elem))
+  {
+    f = list_entry(elem, struct user_file, struct elem);
+    if(f->fid == fd) 
+      break;
+  }
 
-}
-static int write (int fd, const void *buffer, unsigned size)
-{
+  if(f->fid != fd)
+    return -1;
+  lock_acquire(&lo_file_system);
+  size = file_length(f->file);
+  lock_release(&lo_file_system);
 
+  return size;
 }
 
 //==========================================================================//
@@ -251,6 +269,9 @@ static void valid_string(const char* str)
 {
   char c;
   int i = 0;
+  if(str == NULL)
+    exit_with_error(-1);
+
   for(; (c = (char)*(str + i)) != '\0'; i++)
   {
     if(c == -1)
@@ -259,9 +280,10 @@ static void valid_string(const char* str)
 }
 /* Assures user address pointer + offset is in user space.
    Cleans up resources if not and kills process. */
-static void valid_args_pointers(uint32_t* esp, int num_args)
+static void valid_args_pointers()
 {
-  if(esp + num_args >= (int)PHYS_BASE)
+  if((*(int*)esp >= *(int*)PHYS_BASE || get_user(esp) == -1) && 
+     (*(int*)(esp + 3) >= *(int*)PHYS_BASE))
     exit_with_error(-1);
 }
 
@@ -276,6 +298,6 @@ static void exit_with_error(int status)
 //returnes a new file descriptor
 static unsigned generate_file_descriptor(void)
 {
-  unsigned stat_u_file_index = FILE_DESCRIPTOR_INDEX_BASE;
+  static unsigned stat_u_file_index = FILE_DESCRIPTOR_INDEX_BASE;
   return ++stat_u_file_index;
 }

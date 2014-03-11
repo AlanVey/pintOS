@@ -110,6 +110,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     /* Used by System Calls for exiting */
     int32_t exit_value;
+    struct list files;
 #endif
 
     /* Owned by thread.c. */
