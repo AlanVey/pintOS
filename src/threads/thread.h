@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "devices/timer.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -108,9 +109,15 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    /* Used by System Calls for exiting */
+    /* Used by System Calls */
     int32_t exit_value;
     struct list files;
+    
+    bool waited;
+    bool exited;
+    struct thread* parent;
+    // list of children
+    struct list children;
 #endif
 
     /* Owned by thread.c. */

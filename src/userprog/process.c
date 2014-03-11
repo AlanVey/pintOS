@@ -23,11 +23,13 @@
 /* Size of a page */
 #define MAX_BYTES_FOR_ARGS 4096
 
+typedef tid_t pid_t;
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool initialise_program_stack (void **esp, char *token, char **saveptr);
 /* Function indirectly used as part of SYS_WAIT implementation */
-static void find_thread(struct thread *t, void *aux);
+static struct thread* get_child(struct list* l, pid_t pid);
 
 
 /* Starts a new thread running a user program loaded from
@@ -115,6 +117,7 @@ start_process (void *file_name_)
   if (!success) 
   {
     palloc_free_page (file_name);
+    thread_current()->exit_value = -1;
     thread_exit ();
   }
   else 
@@ -230,11 +233,22 @@ initialise_program_stack (void **esp, char *token, char **saveptr)
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int
-process_wait (tid_t child_tid) 
+int 
+process_wait (pid_t child_pid) 
 {
-  while(child_tid == child_tid);
-  return child_tid;
+  int ret;
+  struct thread* t = thread_current();
+  struct thread* child = get_child(&(t->children), child_pid);
+
+  if(child == NULL || child->waited)
+    return -1;
+  if(child->exited)
+    return child->exit_value;
+
+  ret = child->exit_value;
+
+  child->waited = true;
+  return ret;
 }
 
 /* Free the current process's resources. */
@@ -243,6 +257,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  // Makes sure parent process is no longer waiting on it
+  cur->exited = true; 
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -608,4 +625,20 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+//extracts the process  which executes the current threads then, searches in
+//its list of acquired files the one referenced by the current file descriptor
+static struct thread* get_child(struct list* l, pid_t pid)
+{
+  struct list_elem* el;
+
+  for(el = list_begin(l); el != list_end(l); el = list_next(el))
+  {
+    struct thread* child = list_entry(el, struct thread, elem);
+    if(child->tid == pid)
+      return child;
+  }
+
+  return NULL;
 }

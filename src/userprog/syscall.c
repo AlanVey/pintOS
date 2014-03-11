@@ -20,7 +20,7 @@ typedef tid_t fid_t;
 // lock for the file system
 static struct lock lo_file_system;
 // global access to stack pointer to make function declarations easier
-static void *esp;
+static void* esp;
 // Struct so threads can keep track of open files
 static struct myfile
 {
@@ -29,23 +29,21 @@ static struct myfile
   struct list_elem elem;
 };
 
-static void syscall_handler (struct intr_frame *);
+static void syscall_handler(struct intr_frame *);
 /* Functions for individual system calls */
-static void halt (void);
-static void exit (int status);
-static pid_t exec (const char *cmd_line);
-static int wait (pid_t pid);
-static bool create (const char *file, unsigned initial_size);
-static bool remove (const char *file);
-static int open (const char *file);
-static int filesize (int fd);
-/*
-static int read (int fd, void *buffer, unsigned size);
-static int write (int fd, const void *buffer, unsigned size);
-static void seek (int fd, unsigned position);
-static unsigned tell (int fd);
-static void close (int fd);
-*/
+static void halt(void);
+static void exit(int status);
+static pid_t exec(const char *cmd_line);
+static int wait(pid_t pid);
+static bool create(const char *file, unsigned initial_size);
+static bool remove(const char *file);
+static int open(const char *file);
+static void close(int fd);
+static int filesize(int fd);
+static int read(int fd, void *buffer, unsigned size);
+static int write(int fd, const void *buffer, unsigned size);
+static void seek(int fd, unsigned position);
+static unsigned tell(int fd);
 
 /* Function for reading data at specified *uaddr */
 static int get_user (const uint8_t *uaddr);
@@ -117,14 +115,16 @@ syscall_handler (struct intr_frame *f)
     case SYS_OPEN: 
     {
       const char *file = *(char**)(esp + 1);
-      bool ret = open(file);
+      int ret = open(file);
       f->eax = ret;
       if(ret == -1)
-        exit_with_error(ret);
+        exit(ret);
       break;
     }
     case SYS_CLOSE: 
     {
+      int fd = *(int*)(esp + 1);
+      close(fd);
       break;
     }
     case SYS_FILESIZE: 
@@ -135,21 +135,34 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_READ: 
     {
+      int fd = *(int*)(esp + 1);
+      void* buffer = *(esp + 2);
+      unsigned size = *(unsigned*)(esp + 3);
+      f->eax = read(fb, buffer, size)
       break;
     }
     case SYS_WRITE: 
     {
+      int fd = *(int*)(esp + 1);
+      const void* buffer = *(esp + 2);
+      unsigned size = *(unsigned*)(esp + 3);
+      f->eax = write(fd, buffer, size);
       break;
     }
     case SYS_SEEK: 
     {
+      int fd = *(int*)(esp + 1);
+      unsigned position = *(unsigned*)(esp + 2);
+      seek(fd, position);
       break;
     }
     case SYS_TELL: 
     {
+      int fd = *(int*)(esp + 1);
+      f->eax = tell(fd);
       break;
     }
-    default: exit_with_error(-1);
+    default: exit(-1);
   }
 }
 
@@ -165,6 +178,15 @@ static void halt (void)
 }
 static void exit (int status)
 {
+  if(lock_held_by_current_thread(&lo_file_system))
+    lock_release (&lo_file_system);
+ 
+  struct thread* t = thread_current(); 
+  while (!list_empty(&t->files))
+  {
+    close(list_entry(list_begin(&t->files), struct myfile, elem)->fid);
+  }
+  
   exit_with_error(status);
 }
 static pid_t exec (const char *cmd_line)
@@ -218,6 +240,11 @@ static int open (const char *file)
   lock_release(&lo_file_system);
   return myf->fid;
 }
+static void close(int fd)
+{
+  if(fd == 0)
+    fd = 1;
+}
 static int filesize (int fd)
 {
   struct myfile* f;
@@ -240,6 +267,22 @@ static int filesize (int fd)
   lock_release(&lo_file_system);
 
   return size;
+}
+static int read(int fd, void *buffer, unsigned size)
+{
+  return 0;
+}
+static int write(int fd, const void *buffer, unsigned size)
+{
+  return 0;
+}
+static void seek(int fd, unsigned position)
+{
+
+}
+static unsigned tell(int fd)
+{
+  return 0;
 }
 
 //==========================================================================//
