@@ -167,10 +167,11 @@ static void exit (int status)
 {
   if(lock_held_by_current_thread(&lo_file_system))
     lock_release (&lo_file_system);
-  
+ 
+  struct thread* t = thread_current(); 
   while (!list_empty(&t->files))
   {
-    close(list_entry(list_begin(&t->files), struct myfile, thread_elem)->fid);
+    close(list_entry(list_begin(&t->files), struct myfile, elem)->fid);
   }
   
   exit_with_error(status);

@@ -30,7 +30,6 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool initialise_program_stack (void **esp, char *token, char **saveptr);
 /* Function indirectly used as part of SYS_WAIT implementation */
-static void find_thread(struct thread *t, void *aux);
 static struct thread* get_child(struct list* l, pid_t pid);
 
 
@@ -119,7 +118,7 @@ start_process (void *file_name_)
   if (!success) 
   {
     palloc_free_page (file_name);
-    cur->exit_value = -1;
+    thread_current()->exit_value = -1;
     thread_exit ();
   }
   else 
@@ -633,11 +632,11 @@ install_page (void *upage, void *kpage, bool writable)
 //its list of acquired files the one referenced by the current file descriptor
 static struct thread* get_child(struct list* l, pid_t pid)
 {
-  struct list_elem* elem;
+  struct list_elem* el;
 
-  for(elem = list_begin(l); elem != list_end(l); elem = list_next(elem))
+  for(el = list_begin(l); el != list_end(l); el = list_next(el))
   {
-    struct thread* child = list_entry(elem, struct lineage, struct elem);
+    struct thread* child = list_entry(el, struct thread, elem);
     if(child->tid == pid)
       return child;
   }
