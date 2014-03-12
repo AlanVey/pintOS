@@ -139,15 +139,15 @@ syscall_handler (struct intr_frame *f)
     case SYS_READ: 
     {
       int fd = *(int*)(esp + 1);
-      void* buffer = *(esp + 2);
+      void* buffer =*(void**)(esp + 2);
       unsigned size = *(unsigned*)(esp + 3);
-      f->eax = read(fb, buffer, size)
+      f->eax = read(fd, buffer, size);
       break;
     }
     case SYS_WRITE: 
     {
       int fd = *(int*)(esp + 1);
-      const void* buffer = *(esp + 2);
+      const void* buffer = *(void**)(esp + 2);
       unsigned size = *(unsigned*)(esp + 3);
       f->eax = write(fd, buffer, size);
       break;
