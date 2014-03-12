@@ -300,7 +300,7 @@ static int read(int fd, void *buffer, unsigned size)
     for(i = 0 ; i < size; i++)
     {
       //reads all characters from keyboard
-      *s_read++ = input_getc();
+      *(s_read + i) = input_getc();
     }
     return size;
   }

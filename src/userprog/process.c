@@ -99,7 +99,7 @@ start_process (void *file_name_)
   /* To store each token from strtok_r */
   char *token;
   /* For the strtok_r function to keep track when tokenising */
-  char *save_ptr;
+  char *saveptr;
 
 
   /* Initialize interrupt frame and load executable. */
@@ -109,7 +109,7 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   
   /* Extract the actual file name from the string */
-  token = strtok_r (file_name, " ", &save_ptr);
+  token = strtok_r (file_name, " ", &saveptr);
   /* Load the ELF executable */
   success = load (token, &if_.eip, &if_.esp);
 
@@ -122,7 +122,7 @@ start_process (void *file_name_)
   }
   else 
   {
-    initialise_program_stack (&if_.esp, token, &save_ptr);
+    initialise_program_stack (&if_.esp, token, &saveptr);
   }
 
   /* Start the user process by simulating a return from an
