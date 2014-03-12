@@ -22,7 +22,6 @@
 #define LAST_TWO_BITS_ZERO 0xfffffffc
 /* Size of a page */
 #define MAX_BYTES_FOR_ARGS 4096
-#define MAX_FILE_NAME_BYTES 200
 
 typedef tid_t pid_t;
 
