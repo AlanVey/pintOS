@@ -270,11 +270,78 @@ static int filesize (int fd)
 }
 static int read(int fd, void *buffer, unsigned size)
 {
-  return 0;
+   //Q)do I have to make another check to the buffer to which I write, in order
+  //not to go over some boundary?
+
+  //if it has to read length keyboard inputs
+  if(fd == STDIN_FILENO)
+  {
+    uint8_t *s_read = (uint8_t *)buffer;
+    //TODO: these int declarations inside for and make them unsigned
+    unsigned i;
+    for(i = 0 ; i < length; i++)
+    {
+      //reads all characters from keyboard
+      *s_read++ = input_getc();
+    }
+    return length;
+  }
+
+  lock_acquire(&lo_file_system);
+  //extracts file from the current process's list
+  struct file *f = fu_get_file(fd);
+  if(!f)
+  {
+    lock_release(&lo_file_system);
+    fu_exit(EXIT_FAILURE);
+  }
+
+  //counts characters read
+  int i_total_chars_read = file_read(f, buffer, length);
+  lock_release(&lo_file_system);
+
+  return i_total_chars_read;
 }
 static int write(int fd, const void *buffer, unsigned size)
 {
-  return 0;
+  //Q)What happens if user wants to write to standard output?
+  
+  //if it has to write to console
+  if(fd == STDOUT_FILENO)
+  {
+    putbuf(buffer, length);
+    return length;
+  }
+
+  lock_acquire(&lo_file_system);
+  //extracts file from the current process's list
+  struct file *f = fu_get_file(fd);
+  if(!f)
+  {
+    lock_release(&lo_file_system);
+    fu_exit(EXIT_FAILURE);
+  }
+
+  //counts characters written
+  int i_total_chars_written = 0;
+  //checks if all characters n a chunk were written
+  bool b_wrote_all = false;
+  //number of chars written at a given time
+  int i_written;
+
+  do
+  {
+    i_written = file_write(f, buffer, WRITE_CHUNK_MAX_SIZE);
+    i_total_chars_written += i_written;
+    //if the whole chunk has been written
+    if(i_written == WRITE_CHUNK_MAX_SIZE)
+    {
+      b_wrote_all = true;
+    }
+  } while(!b_wrote_all);
+
+  lock_release(&lo_file_system);
+  return i_total_chars_written;
 }
 static void seek(int fd, unsigned position)
 {
