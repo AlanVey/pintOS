@@ -470,3 +470,8 @@ static struct myfile* get_indexed_file(int fd)
   } 
   return NULL;
 }
+
+void extern_exit(int status)
+{
+  exit(status);
+}
