@@ -418,7 +418,7 @@ static void valid_string(const char* str)
   char c;
   int i = 0;
   if(str == NULL)
-    exit_with_error(-1);
+    exit(-1);
 
   for(; (c = (char)*(str + i)) != '\0'; i++)
   {
