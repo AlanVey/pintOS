@@ -55,8 +55,6 @@ static int get_user (const uint8_t *uaddr);
 static void valid_string(const char* str);
 /* Function to verify user address pointers */
 static void valid_args_pointers();
-/* Function to exit process with an error */
-static void exit_with_error(int status);
 //returnes a new file descriptor
 static unsigned generate_file_descriptor(void);
 static struct file* get_file(int fd);
@@ -183,20 +181,23 @@ static void halt (void)
 static void exit (int status)
 {
   if(lock_held_by_current_thread(&lo_file_system))
-    lock_release (&lo_file_system);
+    lock_release(&lo_file_system);
  
-  struct thread* t = thread_current(); 
-  while (!list_empty(&t->files))
+  struct list* files = &thread_current()->files; 
+  while (!list_empty(files))
   {
-    close(list_entry(list_begin(&t->files), struct myfile, elem)->fid);
+    close(list_entry(list_begin(files), struct myfile, elem)->fid);
   }
-  
-  exit_with_error(status);
+  thread_current()->exit_value = status;
+  thread_exit();
 }
 static pid_t exec (const char *cmd_line)
 {
   valid_string(cmd_line);
-  return process_execute(cmd_line);
+  lock_acquire(&lo_file_system);
+  pid_t ret = process_execute(cmd_line);
+  lock_release(&lo_file_system);
+  return ret;
 }
 static int wait (pid_t pid)
 {
@@ -433,14 +434,6 @@ static void valid_args_pointers()
   if((*(int*)esp >= *(int*)PHYS_BASE || get_user(esp) == -1) && 
      (*(int*)(esp + 3) >= *(int*)PHYS_BASE))
     exit(-1);
-}
-
-/* Terminates the process with exit code -1 */
-static void exit_with_error(int status)
-{
-  thread_current()->exit_value = status;
-  thread_exit();
-  NOT_REACHED();
 }
 
 //returnes a new file descriptor
