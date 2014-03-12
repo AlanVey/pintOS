@@ -468,4 +468,5 @@ static struct myfile* get_indexed_file(int fd)
     else
       return NULL;
   } 
+  return NULL;
 }
