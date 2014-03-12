@@ -1,4 +1,5 @@
 #include "devices/shutdown.h"
+#include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "userprog/syscall.h"
@@ -57,6 +58,8 @@ static void valid_args_pointers();
 static void exit_with_error(int status);
 //returnes a new file descriptor
 static unsigned generate_file_descriptor(void);
+static struct file* get_file(int fd);
+static struct file_index* get_indexed_file(int fd);
 
 void
 syscall_init (void) 
@@ -242,8 +245,24 @@ static int open (const char *file)
 }
 static void close(int fd)
 {
-  if(fd == 0)
-    fd = 1;
+  lock_acquire(&lo_file_system);
+  //extracts file from the current process's list
+  struct file *f = get_file(fd);
+  if(!f)
+  {
+    lock_release(&lo_file_system);
+    exit(-1);
+  }
+
+  //extract file index
+  struct myfile* f = get_indexed_file(fd);
+  //searches for the list entry corresponding to fd
+  struct list_elem *el = &f->elem;
+  //we know from the above that the file_index is referenced in the list
+  struct myfile* f_to_be_closed = list_entry(el, struct myfile, elem);
+  list_remove(el);
+  free(f_to_be_closed);
+  lock_release(&lo_file_system);
 }
 static int filesize (int fd)
 {
@@ -289,11 +308,11 @@ static int read(int fd, void *buffer, unsigned size)
 
   lock_acquire(&lo_file_system);
   //extracts file from the current process's list
-  struct file *f = fu_get_file(fd);
+  struct file *f = get_file(fd);
   if(!f)
   {
     lock_release(&lo_file_system);
-    fu_exit(EXIT_FAILURE);
+    exit(-1);
   }
 
   //counts characters read
@@ -315,7 +334,7 @@ static int write(int fd, const void *buffer, unsigned size)
 
   lock_acquire(&lo_file_system);
   //extracts file from the current process's list
-  struct file *f = fu_get_file(fd);
+  struct file *f = get_file(fd);
   if(!f)
   {
     lock_release(&lo_file_system);
@@ -387,7 +406,7 @@ static void valid_string(const char* str)
   for(; (c = (char)*(str + i)) != '\0'; i++)
   {
     if(c == -1)
-      exit_with_error(-1);
+      exit(-1);
   }
 }
 /* Assures user address pointer + offset is in user space.
@@ -397,7 +416,7 @@ static void valid_args_pointers()
 {
   if((*(int*)esp >= *(int*)PHYS_BASE || get_user(esp) == -1) && 
      (*(int*)(esp + 3) >= *(int*)PHYS_BASE))
-    exit_with_error(-1);
+    exit(-1);
 }
 
 /* Terminates the process with exit code -1 */
@@ -414,3 +433,31 @@ static unsigned generate_file_descriptor(void)
   static unsigned stat_u_file_index = FILE_DESCRIPTOR_INDEX_BASE;
   return ++stat_u_file_index;
 }
+
+//extracts a file from a file_index structure, given a file descriptor
+static struct file* get_file(int fd)
+{
+  struct myfile* f = get_indexed_file(fd);
+  if(!f)
+    exit(-1);
+  return f->file;
+}
+
+//extracts the process  which executes the current threads then, searches in
+//its list of acquired files the one referenced by the current file descriptor
+static struct file_index* get_indexed_file(int fd)
+{
+  struct list* l = &(thread_current()->files);
+  //iterate over the list
+  struct list_elem* el;
+
+  for(el = list_begin(l) ; el != list_end(l) ; el = list_next(el))
+  {
+    struct myfile* f = list_entry(el, struct myfile, elem);
+    ASSERT(!f);
+    //if we find the file
+    if(f->fid == fd)
+      return f;
+    else
+      return NULL;
+  }
