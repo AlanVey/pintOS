@@ -15,6 +15,7 @@
 
 //the file indexing starts from the following value
 #define FILE_DESCRIPTOR_INDEX_BASE 2
+#define WRITE_CHUNK_MAX_SIZE 512
 // In pintos every process only has one thread can be treated the same
 typedef tid_t pid_t;
 typedef tid_t fid_t;
@@ -59,7 +60,7 @@ static void exit_with_error(int status);
 //returnes a new file descriptor
 static unsigned generate_file_descriptor(void);
 static struct file* get_file(int fd);
-static struct file_index* get_indexed_file(int fd);
+static struct myfile* get_indexed_file(int fd);
 
 void
 syscall_init (void) 
@@ -254,10 +255,8 @@ static void close(int fd)
     exit(-1);
   }
 
-  //extract file index
-  struct myfile* f = get_indexed_file(fd);
   //searches for the list entry corresponding to fd
-  struct list_elem *el = &f->elem;
+  struct list_elem* el = &(get_indexed_file(fd)->elem);
   //we know from the above that the file_index is referenced in the list
   struct myfile* f_to_be_closed = list_entry(el, struct myfile, elem);
   list_remove(el);
@@ -298,12 +297,12 @@ static int read(int fd, void *buffer, unsigned size)
     uint8_t *s_read = (uint8_t *)buffer;
     //TODO: these int declarations inside for and make them unsigned
     unsigned i;
-    for(i = 0 ; i < length; i++)
+    for(i = 0 ; i < size; i++)
     {
       //reads all characters from keyboard
       *s_read++ = input_getc();
     }
-    return length;
+    return size;
   }
 
   lock_acquire(&lo_file_system);
@@ -316,7 +315,7 @@ static int read(int fd, void *buffer, unsigned size)
   }
 
   //counts characters read
-  int i_total_chars_read = file_read(f, buffer, length);
+  int i_total_chars_read = file_read(f, buffer, size);
   lock_release(&lo_file_system);
 
   return i_total_chars_read;
@@ -328,8 +327,8 @@ static int write(int fd, const void *buffer, unsigned size)
   //if it has to write to console
   if(fd == STDOUT_FILENO)
   {
-    putbuf(buffer, length);
-    return length;
+    putbuf(buffer, size);
+    return size;
   }
 
   lock_acquire(&lo_file_system);
@@ -338,7 +337,7 @@ static int write(int fd, const void *buffer, unsigned size)
   if(!f)
   {
     lock_release(&lo_file_system);
-    fu_exit(EXIT_FAILURE);
+    exit(-1);
   }
 
   //counts characters written
@@ -462,19 +461,18 @@ static struct file* get_file(int fd)
 
 //extracts the process  which executes the current threads then, searches in
 //its list of acquired files the one referenced by the current file descriptor
-static struct file_index* get_indexed_file(int fd)
+static struct myfile* get_indexed_file(int fd)
 {
   struct list* l = &(thread_current()->files);
   //iterate over the list
   struct list_elem* el;
 
-  for(el = list_begin(l) ; el != list_end(l) ; el = list_next(el))
+  for(el = list_begin(l); el != list_end(l); el = list_next(el))
   {
     struct myfile* f = list_entry(el, struct myfile, elem);
-    ASSERT(!f);
-    //if we find the file
     if(f->fid == fd)
       return f;
     else
       return NULL;
-  }
+  } 
+}
