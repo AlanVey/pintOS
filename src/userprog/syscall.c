@@ -364,11 +364,28 @@ static int write(int fd, const void *buffer, unsigned size)
 }
 static void seek(int fd, unsigned position)
 {
-
+  lock_acquire(&lo_file_system);
+  //extracts file from the current process's list
+  struct file *f = get_file(fd);
+  if(!f)
+    lock_release(&lo_file_system);
+  //calls the file handling source
+  file_seek(f, position);
+  lock_release(&lo_file_system);
 }
 static unsigned tell(int fd)
 {
-  return 0;
+  lock_acquire(&lo_file_system);
+  //extracts file from the current process's list
+  struct file *f = get_file(fd);
+  if(!f)
+  {
+    lock_release(&lo_file_system);
+    exit(-1);
+  }
+  lock_release(&lo_file_system);
+  //calls the file handling source
+  return (int)file_tell(f);
 }
 
 //==========================================================================//
